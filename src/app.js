@@ -1,7 +1,7 @@
-import { renderWelcome } from './pages/welcome.js'
-import { renderWindows } from './pages/windows.js'
+import { renderWelcome }  from './pages/welcome.js'
+import { renderWindows }  from './pages/windows.js'
 import { renderAmelipro } from './pages/amelipro.js'
-import { renderAbout } from './pages/about.js'
+import { renderAbout }    from './pages/about.js'
 
 let currentPage = 'welcome'
 
@@ -14,23 +14,20 @@ function render() {
   const app = document.getElementById('app')
   app.innerHTML = ''
 
-  const layout = document.createElement('div')
-  layout.className = 'layout'
-
-  // Topbar
+  // ── Topbar ──────────────────────────────────────────────────────────────────
   const topbar = document.createElement('div')
   topbar.className = 'topbar'
 
-  const brand = document.createElement('a')
+  const brand = document.createElement('button')
   brand.className = 'topbar-brand'
   brand.innerHTML = '🩺 Dr Reco'
-  brand.onclick = (e) => { e.preventDefault(); navigate('welcome') }
+  brand.onclick = () => navigate('welcome')
   topbar.appendChild(brand)
 
   const pageTitles = {
-    windows: 'Windows & Maintenance',
+    windows:  'Windows & Maintenance',
     amelipro: 'Outils Amelipro',
-    about: 'À propos',
+    about:    'À propos',
   }
 
   if (currentPage !== 'welcome') {
@@ -45,8 +42,9 @@ function render() {
     topbar.appendChild(title)
   }
 
-  layout.appendChild(topbar)
+  app.appendChild(topbar)
 
+  // ── Main ────────────────────────────────────────────────────────────────────
   const main = document.createElement('main')
   main.className = 'main-content'
 
@@ -57,10 +55,7 @@ function render() {
     case 'about':    renderAbout(main, navigate);    break
   }
 
-  layout.appendChild(main)
-  app.appendChild(layout)
+  app.appendChild(main)
 }
 
-export function renderApp() {
-  render()
-}
+export function renderApp() { render() }

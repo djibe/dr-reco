@@ -12,6 +12,8 @@
     "tauri:build": "npm run tauri build"
   },
   "dependencies": {
+    "@fluentui/tokens": "^1.0.0-alpha.23",
+    "@fluentui/web-components": "^3.0.0-beta.133",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "tauri-plugin-hwinfo": "^0.2.3"

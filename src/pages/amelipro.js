@@ -2,95 +2,81 @@ import { invoke } from '@tauri-apps/api/core'
 
 export function renderAmelipro(container, navigate) {
   container.innerHTML = `
-    <button class="back-btn" id="back-btn">← Accueil</button>
-    <div class="page-header">
+    <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
+
+    <div class="page-header" style="margin-top:12px">
       <h2>🏥 Outils Amelipro</h2>
       <p>Vérification des prérequis logiciels pour Amelipro</p>
     </div>
-    <button class="btn-launch" id="launch-btn">
-      <span>▶</span> Lancer
-    </button>
+
+    <fluent-button appearance="primary" id="launch-btn">▶ Lancer</fluent-button>
+
     <div class="checks-list" id="checks-list"></div>
+    <div id="footer-area" style="margin-top:16px"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
 
-  const launchBtn = container.querySelector('#launch-btn')
+  const launchBtn  = container.querySelector('#launch-btn')
   const checksList = container.querySelector('#checks-list')
+  const footer     = container.querySelector('#footer-area')
 
   launchBtn.addEventListener('click', async () => {
     launchBtn.disabled = true
-    launchBtn.innerHTML = '<span class="spinner"></span> Vérification en cours…'
+    launchBtn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Vérification en cours…'
     checksList.innerHTML = ''
+    footer.innerHTML = ''
 
-    // Remove any previous home button
-    container.querySelector('.btn-home')?.remove()
-
-    // ── Cryptolib CPS version ────────────────────────────────────────────────
-    const cryptoItem = addCheckItem(checksList, {
-      icon: '⏳',
-      label: 'Cryptolib CPS',
-      detail: 'Lecture du registre Windows…',
-      status: 'running',
-    })
-
+    // ── Cryptolib CPS ────────────────────────────────────────────────────────
+    const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     try {
-      const result = await invoke('check_cryptolib_version')
-      setCheckItem(cryptoItem, {
-        icon: result.is_ok ? '✅' : (result.not_found ? '❌' : '⚠️'),
-        label: 'Cryptolib CPS',
-        detail: result.detail,
-        badge: result.is_ok
-          ? { text: 'OK', cls: 'badge-success' }
-          : result.not_found
-            ? { text: 'Non installé', cls: 'badge-error' }
-            : { text: 'Mise à jour requise', cls: 'badge-warning' },
-        status: result.is_ok ? 'success' : (result.not_found ? 'error' : 'warning'),
-      })
+      const r = await invoke('check_cryptolib_version')
+      const color = r.is_ok ? 'success' : (r.not_found ? 'danger' : 'warning')
+      const icon  = r.is_ok ? '✅' : (r.not_found ? '❌' : '⚠️')
+      const badge = r.is_ok
+        ? { text: 'OK',              color: 'success' }
+        : r.not_found
+          ? { text: 'Non installé',        color: 'danger'  }
+          : { text: 'Mise à jour requise', color: 'warning' }
+      setCheck(item, color, icon, 'Cryptolib CPS', r.detail, badge)
     } catch (e) {
-      setCheckItem(cryptoItem, {
-        icon: '❌',
-        label: 'Cryptolib CPS',
-        detail: 'Erreur lors de la lecture du registre : ' + e,
-        badge: { text: 'Erreur', cls: 'badge-error' },
-        status: 'error',
-      })
+      setCheck(item, 'error', '❌', 'Cryptolib CPS', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
     }
 
     // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
-    launchBtn.innerHTML = '<span>🔄</span> Relancer'
+    launchBtn.innerHTML = '🔄 Relancer'
 
-    const homeBtn = document.createElement('button')
-    homeBtn.className = 'btn-home fade-up'
+    const homeBtn = document.createElement('fluent-button')
+    homeBtn.setAttribute('appearance', 'secondary')
     homeBtn.innerHTML = '🏠 Retour à l\'accueil'
     homeBtn.onclick = () => navigate('welcome')
-    checksList.after(homeBtn)
+    footer.appendChild(homeBtn)
   })
 }
 
-function addCheckItem(list, { icon, label, detail, status }) {
+function addCheck(list, label, detail) {
   const item = document.createElement('div')
-  item.className = `check-item status-${status} fade-up`
+  item.className = 'check-item status-running fade-up'
   item.innerHTML = `
-    <div class="check-icon">${icon}</div>
+    <div class="check-icon"><fluent-spinner size="tiny"></fluent-spinner></div>
     <div class="check-body">
       <div class="check-label">${label}</div>
       <div class="check-detail">${detail}</div>
-    </div>
-  `
+    </div>`
   list.appendChild(item)
   return item
 }
 
-function setCheckItem(item, { icon, label, detail, badge, status }) {
+function setCheck(item, status, icon, label, detail, badge) {
+  const badgeHtml = badge
+    ? `<fluent-badge appearance="filled" color="${badge.color}">${badge.text}</fluent-badge>`
+    : ''
   item.className = `check-item status-${status}`
-  const badgeHtml = badge ? `<span class="check-badge ${badge.cls}">${badge.text}</span>` : ''
   item.innerHTML = `
     <div class="check-icon">${icon}</div>
     <div class="check-body">
-      <div class="check-label">${label}${badgeHtml}</div>
+      <div class="check-label">${label} ${badgeHtml}</div>
       <div class="check-detail">${detail}</div>
-    </div>
-  `
+    </div>`
 }

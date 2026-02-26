@@ -128,7 +128,7 @@ fn run_chkdsk() -> Result<CheckResult, String> {
 }
 
 // ─── Cryptolib CPS ───────────────────────────────────────────────────────────
-const MIN_CRYPTOLIB_VERSION: &str = "5.2.2";
+const MIN_CRYPTOLIB_VERSION: &str = "5.2.5";
 
 #[tauri::command]
 fn check_cryptolib_version() -> Result<CheckResult, String> {
