@@ -1,11 +1,16 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getOsInfo } from 'tauri-plugin-hwinfo'
+
+// Windows 11 25H2 = build 26200
+// The plugin returns version as "major.minor.build" e.g. "10.0.26100"
+const MIN_BUILD = 26200
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
     <button class="back-btn" id="back-btn">← Accueil</button>
     <div class="page-header">
       <h2>🪟 Windows &amp; Maintenance</h2>
-      <p>Vérification de l'état du système, intégrité des fichiers et santé du disque</p>
+      <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
     </div>
     <button class="btn-launch" id="launch-btn">
       <span>▶</span> Lancer la vérification
@@ -23,51 +28,60 @@ export function renderWindows(container, navigate) {
     launchBtn.innerHTML = '<span class="spinner"></span> Vérification en cours…'
     checksList.innerHTML = ''
 
-    // ── 1. Windows version ───────────────────────────────────
+    // ── 1. Windows version via tauri-plugin-hwinfo ───────────────────────────
     const versionItem = addCheckItem(checksList, {
       icon: '⏳',
       label: 'Version de Windows',
-      detail: 'Récupération de la version…',
+      detail: 'Récupération des informations système…',
       status: 'running',
     })
 
     try {
-      const result = await invoke('check_windows_version')
-      const ok = result.is_ok
-      const detail = result.detail || ''
+      const osInfo = await getOsInfo()
+      // version format: "major.minor.build" → e.g. "10.0.26100"
+      const parts = (osInfo.version || '').split('.')
+      const build = parseInt(parts[2] ?? '0', 10)
+      const isOk = build >= MIN_BUILD
+
       setCheckItem(versionItem, {
-        icon: ok ? '✅' : '⚠️',
+        icon: isOk ? '✅' : '⚠️',
         label: 'Version de Windows',
-        detail: detail,
-        badge: ok ? { text: 'OK', cls: 'badge-success' } : { text: 'Mise à jour requise', cls: 'badge-warning' },
-        status: ok ? 'success' : 'warning',
+        detail: isOk
+          ? `${osInfo.name} (build ${build}) — Version conforme.`
+          : `${osInfo.name} (build ${build}) — Windows 11 25H2 (build ${MIN_BUILD}) minimum requis. Veuillez mettre à jour via Windows Update.`,
+        badge: isOk
+          ? { text: 'Conforme', cls: 'badge-success' }
+          : { text: 'Mise à jour requise', cls: 'badge-warning' },
+        status: isOk ? 'success' : 'warning',
       })
     } catch (e) {
       setCheckItem(versionItem, {
-        icon: '❌', label: 'Version de Windows',
-        detail: 'Impossible de récupérer la version : ' + e,
-        badge: { text: 'Erreur', cls: 'badge-error' }, status: 'error',
+        icon: '❌',
+        label: 'Version de Windows',
+        detail: 'Erreur lors de la récupération : ' + e,
+        badge: { text: 'Erreur', cls: 'badge-error' },
+        status: 'error',
       })
     }
 
-    // ── 2. SFC /scannow ──────────────────────────────────────
+    // ── 2. SFC /scannow ──────────────────────────────────────────────────────
     const sfcItem = addCheckItem(checksList, {
       icon: '⏳',
       label: 'Intégrité des fichiers système (SFC)',
-      detail: 'Analyse en cours — cette opération peut prendre plusieurs minutes…',
+      detail: 'Analyse en cours — peut prendre plusieurs minutes…',
       status: 'running',
     })
 
     try {
-      const result = await invoke('run_sfc_check')
+      const r = await invoke('run_sfc_check')
       setCheckItem(sfcItem, {
-        icon: result.is_ok ? '✅' : '🔧',
+        icon: r.is_ok ? '✅' : '🔧',
         label: 'Intégrité des fichiers système (SFC)',
-        detail: result.detail,
-        badge: result.is_ok
+        detail: r.detail,
+        badge: r.is_ok
           ? { text: 'OK', cls: 'badge-success' }
           : { text: 'Réparation planifiée', cls: 'badge-warning' },
-        status: result.is_ok ? 'success' : 'warning',
+        status: r.is_ok ? 'success' : 'warning',
       })
     } catch (e) {
       setCheckItem(sfcItem, {
@@ -77,24 +91,24 @@ export function renderWindows(container, navigate) {
       })
     }
 
-    // ── 3. CHKDSK ────────────────────────────────────────────
+    // ── 3. CHKDSK ────────────────────────────────────────────────────────────
     const chkItem = addCheckItem(checksList, {
       icon: '⏳',
-      label: 'Santé du disque système (CHKDSK)',
+      label: 'Santé du disque C: (CHKDSK)',
       detail: 'Analyse du disque en cours…',
       status: 'running',
     })
 
     try {
-      const result = await invoke('run_chkdsk')
+      const r = await invoke('run_chkdsk')
       setCheckItem(chkItem, {
-        icon: result.is_ok ? '✅' : '🔧',
+        icon: r.is_ok ? '✅' : '🔧',
         label: 'Santé du disque C: (CHKDSK)',
-        detail: result.detail,
-        badge: result.is_ok
+        detail: r.detail,
+        badge: r.is_ok
           ? { text: 'OK', cls: 'badge-success' }
           : { text: 'Réparation planifiée', cls: 'badge-warning' },
-        status: result.is_ok ? 'success' : 'warning',
+        status: r.is_ok ? 'success' : 'warning',
       })
     } catch (e) {
       setCheckItem(chkItem, {

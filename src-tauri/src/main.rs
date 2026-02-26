@@ -36,56 +36,6 @@ fn powershell(script: &str) -> Result<(String, i32), String> {
     Ok((combined, exit_code))
 }
 
-// ─── Windows Version ──────────────────────────────────────────────────────────
-const MIN_REQUIRED_BUILD: u32 = 26200;
-
-#[tauri::command]
-fn check_windows_version() -> Result<CheckResult, String> {
-    let build = get_windows_build_from_registry();
-    let friendly = get_windows_friendly_name();
-
-    match build {
-        Some(b) => {
-            let is_ok = b >= MIN_REQUIRED_BUILD;
-            let detail = if is_ok {
-                format!(
-                    "{} (build {}) — Version conforme.",
-                    friendly.as_deref().unwrap_or("Windows"), b
-                )
-            } else {
-                format!(
-                    "{} (build {}) — Windows 11 25H2 (build {}) minimum requis. Veuillez mettre à jour via Windows Update.",
-                    friendly.as_deref().unwrap_or("Windows"), b, MIN_REQUIRED_BUILD
-                )
-            };
-            Ok(CheckResult { is_ok, detail, not_found: false })
-        }
-        None => Ok(CheckResult {
-            is_ok: false,
-            detail: "Impossible de déterminer la version de Windows.".into(),
-            not_found: false,
-        }),
-    }
-}
-
-fn get_windows_build_from_registry() -> Option<u32> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let key = hklm
-        .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
-        .ok()?;
-    let build: String = key.get_value("CurrentBuildNumber").ok()?;
-    build.trim().parse().ok()
-}
-
-fn get_windows_friendly_name() -> Option<String> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let key = hklm
-        .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
-        .ok()?;
-    let name: String = key.get_value("ProductName").ok()?;
-    Some(name)
-}
-
 // ─── SFC /scannow ─────────────────────────────────────────────────────────────
 #[tauri::command]
 fn run_sfc_check() -> Result<CheckResult, String> {
@@ -111,7 +61,6 @@ fn run_sfc_check() -> Result<CheckResult, String> {
             not_found: false,
         })
     } else if found_violations {
-        // Launch DISM repair without waiting
         let _ = powershell("Start-Process -FilePath 'dism.exe' -ArgumentList '/Online','/Cleanup-Image','/RestoreHealth' -WindowStyle Hidden");
         Ok(CheckResult {
             is_ok: false,
@@ -151,7 +100,6 @@ fn run_chkdsk() -> Result<CheckResult, String> {
         || lower.contains("cannot run");
 
     if has_errors && !already_scheduled {
-        // Schedule chkdsk at next reboot via PowerShell — echo 'Y' to auto-confirm
         let _ = powershell("'Y' | chkdsk C: /f /r /x");
         Ok(CheckResult {
             is_ok: false,
@@ -248,8 +196,8 @@ fn open_url(url: String) -> Result<(), String> {
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_hwinfo::init())
         .invoke_handler(tauri::generate_handler![
-            check_windows_version,
             run_sfc_check,
             run_chkdsk,
             check_cryptolib_version,
