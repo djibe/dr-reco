@@ -3,9 +3,21 @@ name = "dr-reco"
 version = "0.1.0"
 description = "Dr Reco - Logiciel gratuit pour les médecins généralistes"
 authors = ["Jean-Baptiste Fron"]
+license = "CC-by-nc-sa 4.0"
+repository = ""
 edition = "2021"
+rust-version = "1.93"
+
+[package.metadata.tauri-winres]
+OriginalFilename = "dr-reco.exe"
+LegalCopyright = "Copyright © 2026"
+FileDescription = ""
+ProductName = ""
+ProductVersion = ""
+CompanyName = "RecoMédicales"
 
 [build-dependencies]
+tauri-winres = "0.3"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
