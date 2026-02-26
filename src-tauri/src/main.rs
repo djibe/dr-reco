@@ -16,6 +16,26 @@ struct CheckResult {
     not_found: bool,
 }
 
+// Run a PowerShell command and return its combined stdout+stderr output.
+fn powershell(script: &str) -> Result<(String, i32), String> {
+    let output = Command::new("powershell.exe")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args([
+            "-NonInteractive",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-Command", script,
+        ])
+        .output()
+        .map_err(|e| format!("Impossible de lancer PowerShell : {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let combined = format!("{}{}", stdout, stderr);
+    let exit_code = output.status.code().unwrap_or(-1);
+    Ok((combined, exit_code))
+}
+
 // ─── Windows Version ──────────────────────────────────────────────────────────
 const MIN_REQUIRED_BUILD: u32 = 26200;
 
@@ -69,17 +89,7 @@ fn get_windows_friendly_name() -> Option<String> {
 // ─── SFC /scannow ─────────────────────────────────────────────────────────────
 #[tauri::command]
 fn run_sfc_check() -> Result<CheckResult, String> {
-    let output = Command::new("sfc")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(["/scannow"])
-        .output()
-        .map_err(|e| format!(
-            "Impossible de lancer SFC : {}. Lancez Dr Reco en tant qu'administrateur.", e
-        ))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let combined = format!("{}{}", stdout, stderr);
+    let (combined, _) = powershell("sfc /scannow")?;
     let lower = combined.to_lowercase();
 
     let found_violations = lower.contains("found corrupt")
@@ -101,19 +111,17 @@ fn run_sfc_check() -> Result<CheckResult, String> {
             not_found: false,
         })
     } else if found_violations {
-        let _ = Command::new("DISM")
-            .creation_flags(CREATE_NO_WINDOW)
-            .args(["/Online", "/Cleanup-Image", "/RestoreHealth"])
-            .spawn();
+        // Launch DISM repair without waiting
+        let _ = powershell("Start-Process -FilePath 'dism.exe' -ArgumentList '/Online','/Cleanup-Image','/RestoreHealth' -WindowStyle Hidden");
         Ok(CheckResult {
             is_ok: false,
             detail: "Des violations d'intégrité ont été détectées. Une réparation DISM /RestoreHealth a été lancée. Redémarrez l'ordinateur pour appliquer les corrections.".into(),
             not_found: false,
         })
-    } else if combined.trim().is_empty() || output.status.code() == Some(740) {
+    } else if combined.trim().is_empty() {
         Ok(CheckResult {
             is_ok: false,
-            detail: "SFC nécessite des droits administrateur. Relancez Dr Reco via clic droit → Exécuter en tant qu'administrateur.".into(),
+            detail: "SFC nécessite des droits administrateur. Relancez Dr Reco en tant qu'administrateur.".into(),
             not_found: false,
         })
     } else {
@@ -129,17 +137,8 @@ fn run_sfc_check() -> Result<CheckResult, String> {
 // ─── CHKDSK C: ───────────────────────────────────────────────────────────────
 #[tauri::command]
 fn run_chkdsk() -> Result<CheckResult, String> {
-    let output = Command::new("chkdsk")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(["C:"])
-        .output()
-        .map_err(|e| format!("Impossible de lancer CHKDSK : {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let combined = format!("{}{}", stdout, stderr);
+    let (combined, exit_code) = powershell("chkdsk C:")?;
     let lower = combined.to_lowercase();
-    let exit_code = output.status.code().unwrap_or(-1);
 
     let has_errors = lower.contains("found errors")
         || lower.contains("errors found")
@@ -152,10 +151,8 @@ fn run_chkdsk() -> Result<CheckResult, String> {
         || lower.contains("cannot run");
 
     if has_errors && !already_scheduled {
-        let _ = Command::new("cmd")
-            .creation_flags(CREATE_NO_WINDOW)
-            .args(["/C", "echo Y | chkdsk C: /f /r /x"])
-            .spawn();
+        // Schedule chkdsk at next reboot via PowerShell — echo 'Y' to auto-confirm
+        let _ = powershell("'Y' | chkdsk C: /f /r /x");
         Ok(CheckResult {
             is_ok: false,
             detail: "Des erreurs ont été trouvées sur le disque C:. Une vérification complète (chkdsk /f /r) a été planifiée au prochain démarrage.".into(),
@@ -244,11 +241,7 @@ fn compare_versions(a: &str, b: &str) -> i32 {
 // ─── Open URL ─────────────────────────────────────────────────────────────────
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    Command::new("cmd")
-        .creation_flags(CREATE_NO_WINDOW)
-        .args(["/C", "start", "", &url])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    powershell(&format!("Start-Process '{}'", url))?;
     Ok(())
 }
 
