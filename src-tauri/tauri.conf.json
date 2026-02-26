@@ -1,18 +1,26 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "dr-reco",
+  "productName": "Dr Reco",
   "version": "0.1.0",
-  "identifier": "com.drreco.app",
+  "identifier": "fr.jbfron.dr-reco",
   "build": {
-    "frontendDist": "../src"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "withGlobalTauri": true,
     "windows": [
       {
-        "title": "dr-reco",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "Dr Reco",
+        "width": 920,
+        "height": 700,
+        "minWidth": 760,
+        "minHeight": 560,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
