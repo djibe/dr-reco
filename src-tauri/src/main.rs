@@ -193,6 +193,43 @@ fn open_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Repair commands ──────────────────────────────────────────────────────────
+// kind: "sfc"    → dism /online /cleanup-image /restorehealth
+// kind: "chkdsk" → chkdsk C: /f /r  (piped Y to auto-confirm scheduling)
+#[tauri::command]
+fn run_repair(kind: String) -> Result<CheckResult, String> {
+    let (script, label) = match kind.as_str() {
+        "sfc" => (
+            "dism /online /cleanup-image /restorehealth",
+            "Réparation DISM",
+        ),
+        "chkdsk" => (
+            "'Y' | chkdsk C: /f /r",
+            "Réparation CHKDSK",
+        ),
+        other => return Err(format!("Type de réparation inconnu : {}", other)),
+    };
+
+    match powershell(script) {
+        Ok((output, code)) => {
+            let is_ok = code == 0;
+            let detail = if is_ok {
+                format!("{} terminée avec succès.", label)
+            } else {
+                let preview: String = output.chars().take(400).collect();
+                format!(
+                    "{} terminée (code {}). Résultat : {}",
+                    label,
+                    code,
+                    preview.trim()
+                )
+            };
+            Ok(CheckResult { is_ok, detail, not_found: false })
+        }
+        Err(e) => Err(format!("Impossible de lancer {} : {}", label, e)),
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -202,6 +239,7 @@ fn main() {
             run_chkdsk,
             check_cryptolib_version,
             open_url,
+            run_repair,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
