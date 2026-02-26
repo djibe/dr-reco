@@ -39,7 +39,6 @@ export function renderWindows(container, navigate) {
 
     try {
       const osInfo = await getOsInfo()
-      // version format: "major.minor.build" → e.g. "10.0.26100"
       const parts = (osInfo.version || '').split('.')
       const build = parseInt(parts[2] ?? '0', 10)
       const isOk = build >= MIN_BUILD
@@ -154,8 +153,15 @@ export function renderWindows(container, navigate) {
       })
     }
 
+    // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '<span>🔄</span> Relancer la vérification'
+
+    const homeBtn = document.createElement('button')
+    homeBtn.className = 'btn-home fade-up'
+    homeBtn.innerHTML = '🏠 Retour à l\'accueil'
+    homeBtn.onclick = () => navigate('welcome')
+    checksList.after(homeBtn)
   })
 }
 

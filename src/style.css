@@ -248,6 +248,30 @@ html, body {
   transform: none;
 }
 
+/* ─── Home button (shown after checks complete) ───── */
+.btn-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  color: var(--accent);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 11px 28px;
+  font-size: 15px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 20px;
+}
+
+.btn-home:hover {
+  background: var(--accent);
+  color: white;
+  transform: translateY(-1px);
+}
+
 /* ─── Check items ─────────────────────────────── */
 .checks-list {
   display: flex;

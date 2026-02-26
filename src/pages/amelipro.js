@@ -23,7 +23,10 @@ export function renderAmelipro(container, navigate) {
     launchBtn.innerHTML = '<span class="spinner"></span> Vérification en cours…'
     checksList.innerHTML = ''
 
-    // ── Cryptolib CPS version ────────────────────────────────
+    // Remove any previous home button
+    container.querySelector('.btn-home')?.remove()
+
+    // ── Cryptolib CPS version ────────────────────────────────────────────────
     const cryptoItem = addCheckItem(checksList, {
       icon: '⏳',
       label: 'Cryptolib CPS',
@@ -54,8 +57,15 @@ export function renderAmelipro(container, navigate) {
       })
     }
 
+    // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '<span>🔄</span> Relancer'
+
+    const homeBtn = document.createElement('button')
+    homeBtn.className = 'btn-home fade-up'
+    homeBtn.innerHTML = '🏠 Retour à l\'accueil'
+    homeBtn.onclick = () => navigate('welcome')
+    checksList.after(homeBtn)
   })
 }
 
