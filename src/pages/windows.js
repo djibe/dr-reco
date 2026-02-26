@@ -80,7 +80,7 @@ export function renderWindows(container, navigate) {
     // ── 3. CHKDSK ────────────────────────────────────────────
     const chkItem = addCheckItem(checksList, {
       icon: '⏳',
-      label: 'Santé du disque C: (CHKDSK)',
+      label: 'Santé du disque système (CHKDSK)',
       detail: 'Analyse du disque en cours…',
       status: 'running',
     })
