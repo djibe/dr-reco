@@ -1,9 +1,10 @@
 import { invoke } from '@tauri-apps/api/core'
-import { getOsInfo } from 'tauri-plugin-hwinfo'
+import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 
 // Windows 11 25H2 = build 26200
 // The plugin returns version as "major.minor.build" e.g. "10.0.26100"
 const MIN_BUILD = 26200
+const MIN_RAM_MB = 16 * 1024 // 16 GB in MB
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
@@ -64,7 +65,42 @@ export function renderWindows(container, navigate) {
       })
     }
 
-    // ── 2. SFC /scannow ──────────────────────────────────────────────────────
+    // ── 2. RAM size via tauri-plugin-hwinfo ──────────────────────────────────
+    const ramItem = addCheckItem(checksList, {
+      icon: '⏳',
+      label: 'Mémoire vive (RAM)',
+      detail: 'Récupération de la taille mémoire…',
+      status: 'running',
+    })
+
+    try {
+      const ramInfo = await getRamInfo()
+      const sizeMb = ramInfo.sizeMb ?? 0
+      const sizeGb = (sizeMb / 1024).toFixed(1)
+      const isOk = sizeMb >= MIN_RAM_MB
+
+      setCheckItem(ramItem, {
+        icon: isOk ? '✅' : '⚠️',
+        label: 'Mémoire vive (RAM)',
+        detail: isOk
+          ? `${sizeGb} Go détectés — Capacité suffisante.`
+          : `${sizeGb} Go détectés — Mémoire vive insuffisante pour que Windows soit fluide. 16 Go minimum recommandés.`,
+        badge: isOk
+          ? { text: `${sizeGb} Go`, cls: 'badge-success' }
+          : { text: 'Mémoire vive insuffisante', cls: 'badge-warning' },
+        status: isOk ? 'success' : 'warning',
+      })
+    } catch (e) {
+      setCheckItem(ramItem, {
+        icon: '❌',
+        label: 'Mémoire vive (RAM)',
+        detail: 'Erreur lors de la récupération : ' + e,
+        badge: { text: 'Erreur', cls: 'badge-error' },
+        status: 'error',
+      })
+    }
+
+    // ── 3. SFC /scannow ──────────────────────────────────────────────────────
     const sfcItem = addCheckItem(checksList, {
       icon: '⏳',
       label: 'Intégrité des fichiers système (SFC)',
@@ -91,7 +127,7 @@ export function renderWindows(container, navigate) {
       })
     }
 
-    // ── 3. CHKDSK ────────────────────────────────────────────────────────────
+    // ── 4. CHKDSK ────────────────────────────────────────────────────────────
     const chkItem = addCheckItem(checksList, {
       icon: '⏳',
       label: 'Santé du disque C: (CHKDSK)',
