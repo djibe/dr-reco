@@ -6,16 +6,16 @@ const MIN_RAM_MB = 16 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
-    <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
+    <fluent-button appearance="transparent" id="back-btn">← Accueil</fluent-button>
 
-    <div class="page-header" style="margin-top:12px">
+    <div class="page-header" style="margin-top:24px">
       <h2>🪟 Windows &amp; Maintenance</h2>
       <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
     </div>
 
-    <fluent-button appearance="primary" id="launch-btn">▶ Lancer la vérification</fluent-button>
+    <fluent-button appearance="primary" id="launch-btn">Démarrer la vérification</fluent-button>
 
-    <div class="checks-list"  id="checks-list"></div>
+    <div class="checks-list" id="checks-list"></div>
     <div class="repair-actions" id="repair-actions"></div>
   `
 
