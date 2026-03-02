@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 
 const MIN_BUILD  = 26200
-const MIN_RAM_MB = 16 * 1024
+const MIN_RAM_MB = 15 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
