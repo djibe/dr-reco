@@ -230,6 +230,73 @@ fn run_repair(kind: String) -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Antivirus detection ──────────────────────────────────────────────────────
+// Queries Win32_SecurityCenter2 via CIM — only works on Windows desktop editions.
+// productState bits: the 4th hex digit indicates real-time protection status.
+// 0x1000 = enabled, 0x0000 = disabled/snoozed.
+// We query for products where productState has the running bit set.
+#[derive(Serialize, Deserialize)]
+struct AntivirusResult {
+    active: Vec<String>,   // display names of running AV products
+    inactive: Vec<String>, // display names of installed but inactive AV products
+}
+
+#[tauri::command]
+fn check_antivirus() -> Result<AntivirusResult, String> {
+    // Get all registered AV products with their state
+    let script = r#"
+$avList = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue
+if ($null -eq $avList) { exit 1 }
+foreach ($av in $avList) {
+    $state = $av.productState
+    # bit 12 (0x1000) in the 24-bit productState integer indicates real-time protection ON
+    $rtpOn = (($state -band 0x1000) -ne 0)
+    $status = if ($rtpOn) { "active" } else { "inactive" }
+    Write-Output "$status|$($av.displayName)"
+}
+"#;
+    let (output, code) = powershell(script)?;
+
+    if code != 0 || output.trim().is_empty() {
+        // SecurityCenter2 unavailable (server edition) or no AV registered
+        return Ok(AntivirusResult { active: vec![], inactive: vec![] });
+    }
+
+    let mut active   = Vec::new();
+    let mut inactive = Vec::new();
+
+    for line in output.lines() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if let Some((status, name)) = line.split_once('|') {
+            match status {
+                "active"   => active.push(name.to_string()),
+                "inactive" => inactive.push(name.to_string()),
+                _ => {}
+            }
+        }
+    }
+
+    Ok(AntivirusResult { active, inactive })
+}
+
+// Activate Microsoft Defender via PowerShell
+#[tauri::command]
+fn activate_defender() -> Result<CheckResult, String> {
+    // Enable real-time monitoring via Set-MpPreference
+    let script = "Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop";
+    let (output, code) = powershell(script)?;
+    let is_ok = code == 0;
+    let detail = if is_ok {
+        "Microsoft Defender a été activé avec succès.".to_string()
+    } else {
+        let preview: String = output.chars().take(300).collect();
+        format!("Échec de l'activation (code {}) : {}", code, preview.trim())
+    };
+    Ok(CheckResult { is_ok, detail, not_found: false })
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -240,6 +307,8 @@ fn main() {
             check_cryptolib_version,
             open_url,
             run_repair,
+            check_antivirus,
+            activate_defender,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

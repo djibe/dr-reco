@@ -33,6 +33,7 @@ export function renderWindows(container, navigate) {
 
     let sfcError    = false
     let chkdskError = false
+    let avError     = false
 
     // ── 1. Windows version ───────────────────────────────────────────────────
     const vItem = addCheck(checksList, 'Version de Windows', 'Récupération des informations système…', 'running')
@@ -90,6 +91,30 @@ export function renderWindows(container, navigate) {
       setCheck(cItem, 'error', '❌', 'Santé du disque C: (CHKDSK)', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
     }
 
+
+    // ── 5. Antivirus ─────────────────────────────────────────────────────────
+    const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…', 'running')
+    try {
+      const av = await invoke('check_antivirus')
+      if (av.active.length > 0) {
+        setCheck(avItem, 'success', '✅', 'Antivirus',
+          `Antivirus actif : ${av.active.join(', ')}.`,
+          { text: av.active[0], color: 'success' })
+      } else if (av.inactive.length > 0) {
+        avError = true
+        setCheck(avItem, 'warning', '⚠️', 'Antivirus',
+          `Aucun antivirus en cours de fonctionnement. Installé mais inactif : ${av.inactive.join(', ')}.`,
+          { text: 'Inactif', color: 'warning' })
+      } else {
+        avError = true
+        setCheck(avItem, 'error', '❌', 'Antivirus',
+          'Aucun antivirus en cours de fonctionnement.',
+          { text: 'Non détecté', color: 'danger' })
+      }
+    } catch (e) {
+      setCheck(avItem, 'error', '❌', 'Antivirus', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+    }
+
     // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer la vérification'
@@ -99,6 +124,10 @@ export function renderWindows(container, navigate) {
     }
     if (chkdskError) {
       addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
+    }
+
+    if (avError) {
+      addDefenderBlock(repairArea)
     }
 
     const homeBtn = document.createElement('fluent-button')
@@ -175,6 +204,47 @@ function addRepairBlock(area, { icon, label, detail, kind }) {
       result.innerHTML = `<div class="check-icon">❌</div><div class="check-body"><div class="check-detail">Erreur : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = `${icon} Réessayer`
+    }
+  })
+}
+
+// ── Defender activation block ─────────────────────────────────────────────────
+function addDefenderBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🛡️</span>
+      <div>
+        <div class="repair-label">Activer Microsoft Defender</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="defender-btn">🛡️ Activer Microsoft Defender</fluent-button>
+    <div class="defender-result hidden"></div>
+  `
+  area.appendChild(block)
+
+  const btn    = block.querySelector('.defender-btn')
+  const result = block.querySelector('.defender-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
+    result.className = 'defender-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Activation de Microsoft Defender…</div></div>`
+
+    try {
+      const r = await invoke('activate_defender')
+      result.className = `defender-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+      result.innerHTML = `
+        <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+        <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+      btn.innerHTML = r.is_ok ? '✅ Defender activé' : '⚠️ Activation avec avertissements'
+    } catch (e) {
+      result.className = 'defender-result check-item status-error fade-up'
+      result.innerHTML = `<div class="check-icon">❌</div><div class="check-body"><div class="check-detail">Erreur : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🛡️ Réessayer'
     }
   })
 }
