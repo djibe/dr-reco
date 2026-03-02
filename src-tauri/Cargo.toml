@@ -5,7 +5,7 @@ description = "Dr Reco - Logiciel gratuit pour les médecins généralistes"
 authors = ["Jean-Baptiste Fron"]
 license = "CC-by-nc-sa 4.0"
 repository = ""
-edition = "2021"
+edition = "2024"
 rust-version = "1.93"
 
 [package.metadata.tauri-winres]
