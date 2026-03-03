@@ -1,4 +1,4 @@
-*, *::before, *::after { box-sizing: border-box;}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
   height: 100%;
@@ -225,3 +225,10 @@ html, body {
 .delay-1 { animation-delay: 0.05s; }
 .delay-2 { animation-delay: 0.1s; }
 .delay-3 { animation-delay: 0.15s; }
+
+/* ─── Cancelled check state ───────────────────────── */
+.check-item.status-cancelled {
+  border-color: var(--colorNeutralStroke1);
+  background: var(--colorNeutralBackground3);
+  opacity: 0.6;
+}
