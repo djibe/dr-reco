@@ -6,24 +6,24 @@ const MIN_RAM_MB = 15 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
-    <fluent-button appearance="transparent" id="back-btn">← Accueil</fluent-button>
+    <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
 
-    <div class="page-header" style="margin-top:24px">
+    <div class="page-header" style="margin-top:12px">
       <h2>🪟 Windows &amp; Maintenance</h2>
       <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
     </div>
 
-    <fluent-button appearance="primary" id="launch-btn">Démarrer la vérification</fluent-button>
+    <fluent-button appearance="primary" id="launch-btn">▶ Lancer la vérification</fluent-button>
 
-    <div class="checks-list" id="checks-list"></div>
+    <div class="checks-list"   id="checks-list"></div>
     <div class="repair-actions" id="repair-actions"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
 
-  const launchBtn   = container.querySelector('#launch-btn')
-  const checksList  = container.querySelector('#checks-list')
-  const repairArea  = container.querySelector('#repair-actions')
+  const launchBtn  = container.querySelector('#launch-btn')
+  const checksList = container.querySelector('#checks-list')
+  const repairArea = container.querySelector('#repair-actions')
 
   launchBtn.addEventListener('click', async () => {
     launchBtn.disabled = true
@@ -31,72 +31,135 @@ export function renderWindows(container, navigate) {
     checksList.innerHTML = ''
     repairArea.innerHTML = ''
 
+    let versionError = false
     let sfcError    = false
     let chkdskError = false
     let avError     = false
 
     // ── 1. Windows version ───────────────────────────────────────────────────
-    const vItem = addCheck(checksList, 'Version de Windows', 'Récupération des informations système…', 'running')
+    const vItem = addCheck(checksList, 'Version de Windows', 'Récupération des informations système…')
     try {
       const osInfo = await getOsInfo()
       const parts  = (osInfo.version || '').split('.')
       const build  = parseInt(parts[2] ?? '0', 10)
       const ok     = build >= MIN_BUILD
-      setCheck(vItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️', 'Version de Windows',
+      versionError = !ok
+      setCheck(vItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️',
+        'Version de Windows',
         ok ? `${osInfo.name} (build ${build}) — Version conforme.`
            : `${osInfo.name} (build ${build}) — Windows 11 25H2 (build ${MIN_BUILD}) requis. Mettez à jour via Windows Update.`,
         ok ? { text: 'Conforme', color: 'success' } : { text: 'Mise à jour requise', color: 'warning' })
     } catch (e) {
-      setCheck(vItem, 'error', '❌', 'Version de Windows', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+      setCheck(vItem, 'warning', '⚠️', 'Version de Windows',
+        `Impossible de récupérer la version du système : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
     }
 
     // ── 2. RAM ───────────────────────────────────────────────────────────────
-    const rItem = addCheck(checksList, 'Mémoire vive (RAM)', 'Récupération de la taille mémoire…', 'running')
+    const rItem = addCheck(checksList, 'Mémoire vive (RAM)', 'Récupération de la taille mémoire…')
     try {
       const ramInfo = await getRamInfo()
       const sizeMb  = ramInfo.sizeMb ?? 0
       const sizeGb  = (sizeMb / 1024).toFixed(1)
       const ok      = sizeMb >= MIN_RAM_MB
-      setCheck(rItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️', 'Mémoire vive (RAM)',
+      setCheck(rItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️',
+        'Mémoire vive (RAM)',
         ok ? `${sizeGb} Go détectés — Capacité suffisante.`
            : `${sizeGb} Go détectés — Mémoire vive insuffisante. 16 Go minimum recommandés.`,
         ok ? { text: `${sizeGb} Go`, color: 'success' } : { text: 'Mémoire vive insuffisante', color: 'warning' })
     } catch (e) {
-      setCheck(rItem, 'error', '❌', 'Mémoire vive (RAM)', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+      setCheck(rItem, 'warning', '⚠️', 'Mémoire vive (RAM)',
+        `Impossible de récupérer les informations mémoire : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
     }
 
-    // ── 3. SFC ───────────────────────────────────────────────────────────────
-    const sItem = addCheck(checksList, 'Intégrité des fichiers système (SFC)', 'Analyse en cours — peut prendre plusieurs minutes…', 'running')
+
+    // ── 3. Storage type (SSD vs HDD) ─────────────────────────────────────────
+    const stItem = addCheck(checksList, 'Type de stockage', 'Détection du type de disque (SSD/HDD)…')
+    try {
+      const r = await invoke('check_storage_type')
+      if (r.ps_unavailable) {
+        setCheck(stItem, 'warning', '⚠️', 'Type de stockage',
+          r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+      } else {
+        setCheck(stItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Type de stockage', r.detail,
+          r.is_ok ? { text: 'SSD', color: 'success' } : { text: 'HDD détecté', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(stItem, 'warning', '⚠️', 'Type de stockage',
+        `La détection du type de stockage n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+
+    // ── 4. WinRE ─────────────────────────────────────────────────────────────
+    const winreItem = addCheck(checksList, 'Windows Recovery (WinRE)', 'Vérification de l’état de la partition de récupération…')
+    let winreError = false
+    try {
+      const r = await invoke('check_winre')
+      if (r.ps_unavailable) {
+        setCheck(winreItem, 'warning', '⚠️', 'Windows Recovery (WinRE)',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        winreError = !r.is_ok && !r.ps_unavailable
+        setCheck(winreItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Windows Recovery (WinRE)', r.detail,
+          r.is_ok ? { text: 'Activé', color: 'success' } : { text: 'Désactivé', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(winreItem, 'warning', '⚠️', 'Windows Recovery (WinRE)',
+        `La vérification WinRE n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+    // ── 5. SFC ───────────────────────────────────────────────────────────────
+    const sItem = addCheck(checksList, 'Intégrité des fichiers système (SFC)', 'Analyse en cours — peut prendre plusieurs minutes…')
     try {
       const r = await invoke('run_sfc_check')
-      sfcError = !r.is_ok
-      setCheck(sItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '🔧',
-        'Intégrité des fichiers système (SFC)', r.detail,
-        r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Erreur détectée', color: 'warning' })
+      if (r.ps_unavailable) {
+        setCheck(sItem, 'warning', '⚠️', 'Intégrité des fichiers système (SFC)',
+          r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+      } else {
+        sfcError = !r.is_ok
+        setCheck(sItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '🔧',
+          'Intégrité des fichiers système (SFC)', r.detail,
+          r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Erreur détectée', color: 'warning' })
+      }
     } catch (e) {
-      sfcError = true
-      setCheck(sItem, 'error', '❌', 'Intégrité des fichiers système (SFC)', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+      setCheck(sItem, 'warning', '⚠️', 'Intégrité des fichiers système (SFC)',
+        `La vérification SFC n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
     }
 
-    // ── 4. CHKDSK ────────────────────────────────────────────────────────────
-    const cItem = addCheck(checksList, 'Santé du disque C: (CHKDSK)', 'Analyse du disque en cours…', 'running')
+    // ── 6. CHKDSK ────────────────────────────────────────────────────────────
+    const cItem = addCheck(checksList, 'Santé du disque C: (CHKDSK)', 'Analyse du disque en cours…')
     try {
       const r = await invoke('run_chkdsk')
-      chkdskError = !r.is_ok
-      setCheck(cItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '🔧',
-        'Santé du disque C: (CHKDSK)', r.detail,
-        r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Erreur détectée', color: 'warning' })
+      if (r.ps_unavailable) {
+        setCheck(cItem, 'warning', '⚠️', 'Santé du disque C: (CHKDSK)',
+          r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+      } else {
+        chkdskError = !r.is_ok
+        setCheck(cItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '🔧',
+          'Santé du disque C: (CHKDSK)', r.detail,
+          r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Erreur détectée', color: 'warning' })
+      }
     } catch (e) {
-      chkdskError = true
-      setCheck(cItem, 'error', '❌', 'Santé du disque C: (CHKDSK)', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+      setCheck(cItem, 'warning', '⚠️', 'Santé du disque C: (CHKDSK)',
+        `La vérification CHKDSK n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
     }
 
-
-    // ── 5. Antivirus ─────────────────────────────────────────────────────────
-    const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…', 'running')
+    // ── 7. Antivirus ─────────────────────────────────────────────────────────
+    const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…')
     try {
       const av = await invoke('check_antivirus')
-      if (av.active.length > 0) {
+      if (av.ps_unavailable) {
+        setCheck(avItem, 'warning', '⚠️', 'Antivirus',
+          'Impossible d\'interroger le centre de sécurité Windows — PowerShell est indisponible sur ce système.',
+          { text: 'PowerShell indisponible', color: 'warning' })
+      } else if (av.active.length > 0) {
         setCheck(avItem, 'success', '✅', 'Antivirus',
           `Antivirus actif : ${av.active.join(', ')}.`,
           { text: av.active[0], color: 'success' })
@@ -112,23 +175,20 @@ export function renderWindows(container, navigate) {
           { text: 'Non détecté', color: 'danger' })
       }
     } catch (e) {
-      setCheck(avItem, 'error', '❌', 'Antivirus', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
+      setCheck(avItem, 'warning', '⚠️', 'Antivirus',
+        `La vérification antivirus n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
     }
 
-    // ── Done ─────────────────────────────────────────────────────────────────
+    // ── Done — repair buttons ─────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer la vérification'
 
-    if (sfcError) {
-      addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows', detail: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
-    }
-    if (chkdskError) {
-      addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
-    }
-
-    if (avError) {
-      addDefenderBlock(repairArea)
-    }
+    if (versionError) addWindowsUpdateBlock(repairArea)
+    if (sfcError)    addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows',    detail: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
+    if (chkdskError) addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque',  detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
+    if (avError)     addDefenderBlock(repairArea)
+    if (winreError)  addWinreRepairBlock(repairArea)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -140,9 +200,9 @@ export function renderWindows(container, navigate) {
 }
 
 // ── Check item helpers ────────────────────────────────────────────────────────
-function addCheck(list, label, detail, status) {
+function addCheck(list, label, detail) {
   const item = document.createElement('div')
-  item.className = `check-item status-${status} fade-up`
+  item.className = 'check-item status-running fade-up'
   item.innerHTML = `
     <div class="check-icon"><fluent-spinner size="tiny"></fluent-spinner></div>
     <div class="check-body">
@@ -194,14 +254,21 @@ function addRepairBlock(area, { icon, label, detail, kind }) {
 
     try {
       const r = await invoke('run_repair', { kind })
-      result.className = `repair-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-      result.innerHTML = `
-        <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-        <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-      btn.innerHTML = r.is_ok ? '✅ Réparation terminée' : '⚠️ Terminée avec avertissements'
+      if (r.ps_unavailable) {
+        result.className = 'repair-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = `${icon} Réessayer`
+      } else {
+        result.className = `repair-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Réparation terminée' : '⚠️ Terminée avec avertissements'
+      }
     } catch (e) {
-      result.className = 'repair-result check-item status-error fade-up'
-      result.innerHTML = `<div class="check-icon">❌</div><div class="check-body"><div class="check-detail">Erreur : ${e}</div></div>`
+      result.className = 'repair-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La réparation n'a pas pu être lancée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = `${icon} Réessayer`
     }
@@ -217,6 +284,7 @@ function addDefenderBlock(area) {
       <span class="repair-icon">🛡️</span>
       <div>
         <div class="repair-label">Activer Microsoft Defender</div>
+        <div class="repair-detail">Set-MpPreference -DisableRealtimeMonitoring $false</div>
       </div>
     </div>
     <fluent-button appearance="primary" class="defender-btn">🛡️ Activer Microsoft Defender</fluent-button>
@@ -235,16 +303,121 @@ function addDefenderBlock(area) {
 
     try {
       const r = await invoke('activate_defender')
-      result.className = `defender-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-      result.innerHTML = `
-        <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-        <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-      btn.innerHTML = r.is_ok ? '✅ Defender activé' : '⚠️ Activation avec avertissements'
+      if (r.ps_unavailable) {
+        result.className = 'defender-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🛡️ Réessayer'
+      } else {
+        result.className = `defender-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Defender activé' : '⚠️ Activation avec avertissements'
+      }
     } catch (e) {
-      result.className = 'defender-result check-item status-error fade-up'
-      result.innerHTML = `<div class="check-icon">❌</div><div class="check-body"><div class="check-detail">Erreur : ${e}</div></div>`
+      result.className = 'defender-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🛡️ Réessayer'
+    }
+  })
+}
+
+// ── WinRE repair block ────────────────────────────────────────────────────────
+function addWinreRepairBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🔄</span>
+      <div>
+        <div class="repair-label">Réparer WinRE</div>
+        <div class="repair-detail">reagentc /disable → reagentc /enable</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="winre-btn">🔄 Réparer WinRE</fluent-button>
+    <div class="winre-result hidden"></div>
+  `
+  area.appendChild(block)
+
+  const btn    = block.querySelector('.winre-btn')
+  const result = block.querySelector('.winre-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Réparation en cours…'
+    result.className = 'winre-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Exécution de reagentc /disable puis /enable…</div></div>`
+
+    try {
+      const r = await invoke('repair_winre')
+      if (r.ps_unavailable) {
+        result.className = 'winre-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🔄 Réessayer'
+      } else {
+        result.className = `winre-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ WinRE réparé' : '⚠️ Réparation avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'winre-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La réparation WinRE n'a pas pu être lancée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🔄 Réessayer'
+    }
+  })
+}
+
+// ── Windows Update action block ───────────────────────────────────────────────
+function addWindowsUpdateBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🔄</span>
+      <div>
+        <div class="repair-label">Lancer Windows Update</div>
+        <div class="repair-detail">usoclient ScanInstallWait</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="wu-btn">🔄 Lancer Windows Update</fluent-button>
+    <div class="wu-result hidden"></div>
+  `
+  area.appendChild(block)
+
+  const btn    = block.querySelector('.wu-btn')
+  const result = block.querySelector('.wu-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Lancement en cours…'
+    result.className = 'wu-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Démarrage de Windows Update en arrière-plan…</div></div>`
+
+    try {
+      const r = await invoke('launch_windows_update')
+      if (r.ps_unavailable) {
+        result.className = 'wu-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🔄 Réessayer'
+      } else {
+        result.className = `wu-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Windows Update lancé' : '⚠️ Lancé avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'wu-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Windows Update n'a pas pu être lancé : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🔄 Réessayer'
     }
   })
 }
