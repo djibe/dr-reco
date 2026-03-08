@@ -29,12 +29,14 @@ export function renderAmelipro(container, navigate) {
 
     // ── Cryptolib CPS ────────────────────────────────────────────────────────
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
+    let cryptolibOutdated = false
     try {
       const r = await invoke('check_cryptolib_version')
+      cryptolibOutdated = !r.is_ok && !r.not_found
       const color = r.is_ok ? 'success' : (r.not_found ? 'danger' : 'warning')
       const icon  = r.is_ok ? '✅' : (r.not_found ? '❌' : '⚠️')
       const badge = r.is_ok
-        ? { text: 'OK',              color: 'success' }
+        ? { text: 'OK',                  color: 'success' }
         : r.not_found
           ? { text: 'Non installé',        color: 'danger'  }
           : { text: 'Mise à jour requise', color: 'warning' }
@@ -46,6 +48,8 @@ export function renderAmelipro(container, navigate) {
     // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
+
+    if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -79,4 +83,43 @@ function setCheck(item, status, icon, label, detail, badge) {
       <div class="check-label">${label} ${badgeHtml}</div>
       <div class="check-detail">${detail}</div>
     </div>`
+}
+
+// ── Cryptolib download block ──────────────────────────────────────────────────
+const CRYPTOLIB_URL = 'https://esante.gouv.fr/sites/default/files/media/document/CryptolibCPS-5.2.6_x64.msi'
+
+function addCryptolibDownloadBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">📦</span>
+      <div>
+        <div class="repair-label">Mettre à jour Cryptolib CPS</div>
+        <div class="repair-detail">CryptolibCPS-5.2.6_x64.msi — esante.gouv.fr</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="dl-btn">⬇️ Télécharger Cryptolib CPS 5.2.6</fluent-button>
+    <div class="dl-result hidden"></div>
+  `
+  area.insertBefore(block, area.firstChild)
+
+  const btn    = block.querySelector('.dl-btn')
+  const result = block.querySelector('.dl-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture du téléchargement…'
+    try {
+      await invoke('open_url', { url: CRYPTOLIB_URL })
+      result.className = 'dl-result check-item status-success fade-up'
+      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">Le téléchargement a été ouvert dans votre navigateur. Installez le fichier .msi une fois téléchargé.</div></div>`
+      btn.innerHTML = '✅ Téléchargement ouvert'
+    } catch (e) {
+      result.className = 'dl-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '⬇️ Réessayer'
+    }
+  })
 }
