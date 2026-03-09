@@ -480,6 +480,35 @@ fn check_services_cnam() -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Smart card reader detection ─────────────────────────────────────────────
+#[tauri::command]
+fn check_smartcard_reader() -> Result<CheckResult, String> {
+    let script = "Get-PnpDevice -Class SmartCardReader -Status OK -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FriendlyName";
+    match powershell(script) {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de détecter les lecteurs de carte — {}", e)
+        )),
+        PsResult::Ok(output, _) => {
+            let names: Vec<&str> = output
+                .lines()
+                .map(|l| l.trim())
+                .filter(|l| !l.is_empty())
+                .collect();
+            if names.is_empty() {
+                Ok(CheckResult::err(
+                    "Aucun lecteur de carte à puce détecté. Vérifiez que le lecteur est branché et que ses pilotes sont installés."
+                ))
+            } else {
+                Ok(CheckResult::ok(format!(
+                    "Lecteur de carte à puce détecté : {}.",
+                    names.join(", ")
+                )))
+            }
+        }
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -497,6 +526,7 @@ fn main() {
             repair_winre,
             launch_windows_update,
             check_services_cnam,
+            check_smartcard_reader,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

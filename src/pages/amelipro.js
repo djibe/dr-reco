@@ -65,6 +65,24 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+        // ── Lecteur de carte à puce ───────────────────────────────────────────────
+    const scItem = addCheck(checksList, 'Lecteur de carte à puce', 'Recherche de périphériques connectés…')
+    try {
+      const r = await invoke('check_smartcard_reader')
+      if (r.ps_unavailable) {
+        setCheck(scItem, 'warning', '⚠️', 'Lecteur de carte à puce',
+          r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+      } else {
+        setCheck(scItem, r.is_ok ? 'success' : 'error', r.is_ok ? '✅' : '❌',
+          'Lecteur de carte à puce', r.detail,
+          r.is_ok ? { text: 'Connecté', color: 'success' } : { text: 'Non détecté', color: 'danger' })
+      }
+    } catch (e) {
+      setCheck(scItem, 'warning', '⚠️', 'Lecteur de carte à puce',
+        `La détection n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
         // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
