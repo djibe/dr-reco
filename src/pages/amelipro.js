@@ -45,11 +45,32 @@ export function renderAmelipro(container, navigate) {
       setCheck(item, 'error', '❌', 'Cryptolib CPS', 'Erreur : ' + e, { text: 'Erreur', color: 'danger' })
     }
 
-    // ── Done ─────────────────────────────────────────────────────────────────
+    // ── Services CNAM ─────────────────────────────────────────────────────────
+    const cnamItem = addCheck(checksList, 'Services CNAM (SrvSvCnam)', 'Lecture du registre Windows…')
+    let cnamOutdated = false
+    try {
+      const r = await invoke('check_services_cnam')
+      cnamOutdated = !r.is_ok
+      const color = r.is_ok ? 'success' : (r.not_found ? 'danger' : 'warning')
+      const icon  = r.is_ok ? '✅' : (r.not_found ? '❌' : '⚠️')
+      const badge = r.is_ok
+        ? { text: 'Conforme',            color: 'success' }
+        : r.not_found
+          ? { text: 'Non installé',        color: 'danger'  }
+          : { text: 'Mise à jour requise', color: 'warning' }
+      setCheck(cnamItem, color, icon, 'Services CNAM (SrvSvCnam)', r.detail, badge)
+    } catch (e) {
+      setCheck(cnamItem, 'warning', '⚠️', 'Services CNAM (SrvSvCnam)',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+        // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
 
     if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
+    if (cnamOutdated)      addCnamDownloadBlock(footer)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -117,6 +138,45 @@ function addCryptolibDownloadBlock(area) {
       btn.innerHTML = '✅ Téléchargement ouvert'
     } catch (e) {
       result.className = 'dl-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '⬇️ Réessayer'
+    }
+  })
+}
+
+// ── Services CNAM download block ──────────────────────────────────────────────
+const CNAM_URL = 'https://espacepro.ameli.fr/inscription/#/aide#blocs-2'
+
+function addCnamDownloadBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">📦</span>
+      <div>
+        <div class="repair-label">Mettre à jour les Services CNAM</div>
+        <div class="repair-detail">espacepro.ameli.fr — Section Aide</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="cnam-btn">⬇️ Télécharger les Services CNAM</fluent-button>
+    <div class="cnam-result hidden"></div>
+  `
+  area.insertBefore(block, area.firstChild)
+
+  const btn    = block.querySelector('.cnam-btn')
+  const result = block.querySelector('.cnam-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
+    try {
+      await invoke('open_url', { url: CNAM_URL })
+      result.className = 'cnam-result check-item status-success fade-up'
+      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">La page de téléchargement AmeliPro a été ouverte dans votre navigateur.</div></div>`
+      btn.innerHTML = '✅ Page ouverte'
+    } catch (e) {
+      result.className = 'cnam-result check-item status-warning fade-up'
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '⬇️ Réessayer'

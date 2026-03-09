@@ -446,6 +446,40 @@ fn launch_windows_update() -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Services CNAM ────────────────────────────────────────────────────────────
+const EXPECTED_SRVSVCNAM: &str = "Composant SrvSvCnam 5.10.04";
+const SRVSVCNAM_KEY: &str = "Installer\\Products\\2f2196035f673ab429069e5f188c68dd";
+
+#[tauri::command]
+fn check_services_cnam() -> Result<CheckResult, String> {
+    let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
+
+    match hkcr.open_subkey(SRVSVCNAM_KEY) {
+        Err(_) => Ok(CheckResult::missing(
+            "Services CNAM introuvables. Le composant SrvSvCnam n'est pas installé."
+        )),
+        Ok(key) => match key.get_value::<String, _>("ProductName") {
+            Err(_) => Ok(CheckResult::missing(
+                "Clé Services CNAM trouvée mais la valeur ProductName est absente."
+            )),
+            Ok(name) => {
+                let name = name.trim().to_string();
+                if name == EXPECTED_SRVSVCNAM {
+                    Ok(CheckResult::ok(format!(
+                        "Services CNAM détectés : {} — Version conforme.", name
+                    )))
+                } else {
+                    Ok(CheckResult::err(format!(
+                        "Services CNAM détectés mais version incorrecte : {} (attendu : {}). Veuillez mettre à jour le composant.",
+                        name, EXPECTED_SRVSVCNAM
+                    )))
+                }
+            }
+        }
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -462,6 +496,7 @@ fn main() {
             check_winre,
             repair_winre,
             launch_windows_update,
+            check_services_cnam,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
