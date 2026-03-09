@@ -83,6 +83,40 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+        // ── Navigateur & extension Lecture Carte Vitale ──────────────────────────
+    const brItem = addCheck(checksList, 'Navigateur & extension Carte Vitale', 'Détection du navigateur par défaut…')
+    try {
+      const r = await invoke('check_browser_and_extension')
+
+      if (r.ps_unavailable) {
+        setCheck(brItem, 'warning', '⚠️', 'Navigateur & extension Carte Vitale',
+          r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+
+      } else if (!r.extension_checked) {
+        // Browser detected but not Chrome or Firefox
+        const icon = r.browser === 'unknown' ? '❌' : '⚠️'
+        const status = r.browser === 'unknown' ? 'error' : 'warning'
+        const badge = r.browser === 'unknown'
+          ? { text: 'Navigateur inconnu', color: 'danger' }
+          : { text: r.browser_label, color: 'warning' }
+        setCheck(brItem, status, icon, 'Navigateur & extension Carte Vitale',
+          r.detail, badge)
+
+      } else if (r.extension_found) {
+        setCheck(brItem, 'success', '✅', 'Navigateur & extension Carte Vitale',
+          r.detail, { text: r.browser_label, color: 'success' })
+
+      } else {
+        // Extension missing
+        setCheck(brItem, 'error', '❌', 'Navigateur & extension Carte Vitale',
+          r.detail, { text: 'Extension manquante', color: 'danger' })
+      }
+    } catch (e) {
+      setCheck(brItem, 'warning', '⚠️', 'Navigateur & extension Carte Vitale',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
         // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'

@@ -509,6 +509,150 @@ fn check_smartcard_reader() -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Browser & extension detection ───────────────────────────────────────────
+
+#[derive(Serialize, Deserialize)]
+struct BrowserResult {
+    browser:            String,  // "chrome" | "firefox" | "edge" | "other" | "unknown"
+    browser_label:      String,  // Human-readable name
+    extension_found:    bool,
+    extension_checked:  bool,    // false if browser not supported for extension check
+    detail:             String,
+    ps_unavailable:     bool,
+}
+
+#[tauri::command]
+fn check_browser_and_extension() -> Result<BrowserResult, String> {
+    // ── Step 1: detect default browser via registry ──────────────────────────
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let prog_id: String = hkcu
+        .open_subkey(
+            "Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice",
+        )
+        .and_then(|k| k.get_value("ProgId"))
+        .unwrap_or_default();
+
+    let prog_lower = prog_id.to_lowercase();
+    let (browser, browser_label) = if prog_lower.contains("chrome") {
+        ("chrome", "Google Chrome")
+    } else if prog_lower.contains("firefox") {
+        ("firefox", "Mozilla Firefox")
+    } else if prog_lower.contains("msedge") || prog_lower.contains("edge") {
+        ("edge", "Microsoft Edge")
+    } else if prog_id.is_empty() {
+        ("unknown", "Inconnu")
+    } else {
+        ("other", prog_id.as_str())
+    };
+
+    // ── Step 2: check extension per browser ──────────────────────────────────
+    match browser {
+        "chrome" => {
+            // Extension registry key (64-bit path first, then 32-bit fallback)
+            const EXT_ID: &str = "kpjpglcbcgnblkigbedgaoegjbifejka";
+            let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+            let key_64 = format!("SOFTWARE\\Google\\Chrome\\Extensions\\{}", EXT_ID);
+            let key_32 = format!("SOFTWARE\\WOW6432Node\\Google\\Chrome\\Extensions\\{}", EXT_ID);
+            let found = hklm.open_subkey(&key_64).is_ok()
+                || hklm.open_subkey(&key_32).is_ok();
+
+            let detail = if found {
+                format!(
+                    "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" ({}) détectée.",
+                    browser_label, EXT_ID
+                )
+            } else {
+                format!(
+                    "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" ({}) non trouvée.",
+                    browser_label, EXT_ID
+                )
+            };
+
+            Ok(BrowserResult {
+                browser: browser.into(),
+                browser_label: browser_label.into(),
+                extension_found: found,
+                extension_checked: true,
+                detail,
+                ps_unavailable: false,
+            })
+        }
+
+        "firefox" => {
+            // Scan all Firefox profile extensions.json files for the extension name
+            let script = r#"
+$found = $false
+$profilesDir = "$env:APPDATA\Mozilla\Firefox\Profiles"
+if (Test-Path $profilesDir) {
+    Get-ChildItem $profilesDir -Directory | ForEach-Object {
+        $extFile = Join-Path $_.FullName "extensions.json"
+        if (Test-Path $extFile) {
+            $json = Get-Content $extFile -Raw -ErrorAction SilentlyContinue
+            if ($json -match '"Lecture Carte Vitale"') {
+                $found = $true
+            }
+        }
+    }
+}
+if ($found) { Write-Output "found" } else { Write-Output "not_found" }
+"#;
+            match powershell(script) {
+                PsResult::SpawnFailed(e) => Ok(BrowserResult {
+                    browser: browser.into(),
+                    browser_label: browser_label.into(),
+                    extension_found: false,
+                    extension_checked: false,
+                    detail: format!("Navigateur par défaut : {}. Impossible de vérifier l’extension — {}", browser_label, e),
+                    ps_unavailable: true,
+                }),
+                PsResult::Ok(output, _) => {
+                    let found = output.trim() == "found";
+                    let detail = if found {
+                        format!(
+                            "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" détectée.",
+                            browser_label
+                        )
+                    } else {
+                        format!(
+                            "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" non trouvée dans les profils Firefox.",
+                            browser_label
+                        )
+                    };
+                    Ok(BrowserResult {
+                        browser: browser.into(),
+                        browser_label: browser_label.into(),
+                        extension_found: found,
+                        extension_checked: true,
+                        detail,
+                        ps_unavailable: false,
+                    })
+                }
+            }
+        }
+
+        _ => {
+            // Edge, other, or unknown — report browser but skip extension check
+            let detail = if browser == "unknown" {
+                "Impossible de détecter le navigateur par défaut.".into()
+            } else {
+                format!(
+                    "Navigateur par défaut : {}. La vérification de l\'extension \"Lecture Carte Vitale\" n\'est pas prise en charge pour ce navigateur.",
+                    browser_label
+                )
+            };
+            Ok(BrowserResult {
+                browser: browser.into(),
+                browser_label: browser_label.into(),
+                extension_found: false,
+                extension_checked: false,
+                detail,
+                ps_unavailable: false,
+            })
+        }
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -527,6 +671,7 @@ fn main() {
             launch_windows_update,
             check_services_cnam,
             check_smartcard_reader,
+            check_browser_and_extension,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
