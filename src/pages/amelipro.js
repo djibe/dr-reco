@@ -30,6 +30,7 @@ export function renderAmelipro(container, navigate) {
     // ── Cryptolib CPS ────────────────────────────────────────────────────────
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     let cryptolibOutdated = false
+    let extensionMissingBrowser = null
     try {
       const r = await invoke('check_cryptolib_version')
       cryptolibOutdated = !r.is_ok && !r.not_found
@@ -107,7 +108,8 @@ export function renderAmelipro(container, navigate) {
           r.detail, { text: r.browser_label, color: 'success' })
 
       } else {
-        // Extension missing
+        // Extension missing — store browser for download block
+        extensionMissingBrowser = r.browser
         setCheck(brItem, 'error', '❌', 'Navigateur & extension Carte Vitale',
           r.detail, { text: 'Extension manquante', color: 'danger' })
       }
@@ -123,6 +125,7 @@ export function renderAmelipro(container, navigate) {
 
     if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
     if (cnamOutdated)      addCnamDownloadBlock(footer)
+    if (extensionMissingBrowser) addExtensionDownloadBlock(footer, extensionMissingBrowser)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -232,6 +235,52 @@ function addCnamDownloadBlock(area) {
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '⬇️ Réessayer'
+    }
+  })
+}
+
+// ── Extension download block ──────────────────────────────────────────────────
+const EXTENSION_URLS = {
+  chrome:  'https://chromewebstore.google.com/detail/lecture-carte-vitale/kpjpglcbcgnblkigbedgaoegjbifejka?hl=fr',
+  firefox: 'https://addons.mozilla.org/fr/firefox/addon/lecture-carte-vitale/',
+}
+
+function addExtensionDownloadBlock(area, browser) {
+  const url         = EXTENSION_URLS[browser]
+  const browserName = browser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'
+  const store       = browser === 'chrome' ? 'Chrome Web Store' : 'Firefox Add-ons'
+
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🧩</span>
+      <div>
+        <div class="repair-label">Installer l'extension Lecture Carte Vitale</div>
+        <div class="repair-detail">${store} — ${browserName}</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="ext-btn">🧩 Installer l'extension</fluent-button>
+    <div class="ext-result hidden"></div>
+  `
+  area.insertBefore(block, area.firstChild)
+
+  const btn    = block.querySelector('.ext-btn')
+  const result = block.querySelector('.ext-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
+    try {
+      await invoke('open_url', { url })
+      result.className = 'ext-result check-item status-success fade-up'
+      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">La page ${store} a été ouverte dans votre navigateur. Cliquez sur "Ajouter" pour installer l'extension.</div></div>`
+      btn.innerHTML = '✅ Page ouverte'
+    } catch (e) {
+      result.className = 'ext-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🧩 Réessayer'
     }
   })
 }
