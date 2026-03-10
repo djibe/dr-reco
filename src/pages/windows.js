@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 
 const MIN_BUILD  = 26200
-const MIN_RAM_MB = 15 * 1024
+const MIN_RAM_MB = 16 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
@@ -52,6 +52,7 @@ export function renderWindows(container, navigate) {
 
     let versionError = false
     let sfcError     = false
+    let fastStartupDisabled = false
     let chkdskError  = false
     let avError      = false
     let winreError   = false
@@ -221,6 +222,22 @@ export function renderWindows(container, navigate) {
       }
     }
 
+    // ── 8. Démarrage rapide ───────────────────────────────────────────────────
+    const fsItem = addCheck(checksList, 'Démarrage rapide Windows', 'Lecture du registre…')
+    if (!wasCancelled(fsItem, 'Démarrage rapide Windows')) {
+      try {
+        const r = await invoke('check_fast_startup')
+        fastStartupDisabled = !r.is_ok
+        setCheck(fsItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Démarrage rapide Windows', r.detail,
+          r.is_ok ? { text: 'Activé', color: 'success' } : { text: 'Désactivé', color: 'warning' })
+      } catch (e) {
+        setCheck(fsItem, 'warning', '⚠️', 'Démarrage rapide Windows',
+          `La vérification n'a pas pu être lancée : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
     // ── Done ─────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
@@ -232,6 +249,7 @@ export function renderWindows(container, navigate) {
       if (chkdskError)  addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
       if (avError)      addDefenderBlock(repairArea)
       if (winreError)   addWinreRepairBlock(repairArea)
+      if (fastStartupDisabled) addFastStartupBlock(repairArea)
     }
 
     const homeBtn = document.createElement('fluent-button')
@@ -462,6 +480,55 @@ function addWindowsUpdateBlock(area) {
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Windows Update n'a pas pu être lancé : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🔄 Réessayer'
+    }
+  })
+}
+
+// ── Fast Startup enable block ─────────────────────────────────────────────────
+function addFastStartupBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">⚡</span>
+      <div>
+        <div class="repair-label">Activer le démarrage rapide</div>
+        <div class="repair-detail">powercfg /hibernate on → HiberbootEnabled = 1</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="fs-btn">⚡ Activer le démarrage rapide</fluent-button>
+    <div class="fs-result hidden"></div>
+  `
+  area.appendChild(block)
+
+  const btn    = block.querySelector('.fs-btn')
+  const result = block.querySelector('.fs-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
+    result.className = 'fs-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Activation du démarrage rapide…</div></div>`
+
+    try {
+      const r = await invoke('enable_fast_startup')
+      if (r.ps_unavailable) {
+        result.className = 'fs-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '⚡ Réessayer'
+      } else {
+        result.className = `fs-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Démarrage rapide activé' : '⚠️ Activation avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'fs-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '⚡ Réessayer'
     }
   })
 }

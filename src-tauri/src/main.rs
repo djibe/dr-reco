@@ -777,6 +777,51 @@ fn launch_browser_update(browser: String) -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Windows Fast Startup ─────────────────────────────────────────────────────
+// Stored at HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+// HiberbootEnabled DWORD: 1 = fast startup on, 0 = off, missing = off
+#[tauri::command]
+fn check_fast_startup() -> Result<CheckResult, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let key = hklm
+        .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power")
+        .map_err(|e| format!("Impossible de lire la clé Power : {}", e))?;
+
+    let enabled: u32 = key.get_value("HiberbootEnabled").unwrap_or(0);
+
+    if enabled == 1 {
+        Ok(CheckResult::ok("Démarrage rapide activé — les démarrages de Windows sont optimisés."))
+    } else {
+        Ok(CheckResult::err("Démarrage rapide désactivé. L'activer accélère le démarrage de Windows."))
+    }
+}
+
+// ─── Windows Fast Startup ─────────────────────────────────────────────────────
+// HiberbootEnabled DWORD at:
+// HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+// 1 = enabled, 0 = disabled, missing key = disabled
+const FAST_STARTUP_KEY: &str =
+    "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power";
+
+#[tauri::command]
+fn enable_fast_startup() -> Result<CheckResult, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    match hklm.open_subkey_with_flags(FAST_STARTUP_KEY, winreg::enums::KEY_SET_VALUE) {
+        Err(e) => Ok(CheckResult::unavailable(format!(
+            "Impossible d'ouvrir la clé de registre en écriture (droits administrateur requis) : {}", e
+        ))),
+        Ok(key) => match key.set_value("HiberbootEnabled", &1u32) {
+            Ok(_) => Ok(CheckResult::ok(
+                "Le démarrage rapide a été activé avec succès. Les changements prendront effet au prochain arrêt complet de l'ordinateur."
+            )),
+            Err(e) => Ok(CheckResult::unavailable(format!(
+                "Impossible d'écrire dans le registre : {}", e
+            ))),
+        },
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -798,6 +843,8 @@ fn main() {
             check_browser_and_extension,
             check_browser_version,
             launch_browser_update,
+            check_fast_startup,
+            enable_fast_startup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
