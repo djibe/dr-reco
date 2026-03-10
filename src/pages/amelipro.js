@@ -31,6 +31,7 @@ export function renderAmelipro(container, navigate) {
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     let cryptolibOutdated = false
     let extensionMissingBrowser = null
+    let detectedBrowser = null
     try {
       const r = await invoke('check_cryptolib_version')
       cryptolibOutdated = !r.is_ok && !r.not_found
@@ -95,6 +96,7 @@ export function renderAmelipro(container, navigate) {
 
       } else if (!r.extension_checked) {
         // Browser detected but not Chrome or Firefox
+        detectedBrowser = r.browser
         const icon = r.browser === 'unknown' ? '❌' : '⚠️'
         const status = r.browser === 'unknown' ? 'error' : 'warning'
         const badge = r.browser === 'unknown'
@@ -104,11 +106,13 @@ export function renderAmelipro(container, navigate) {
           r.detail, badge)
 
       } else if (r.extension_found) {
+        detectedBrowser = r.browser
         setCheck(brItem, 'success', '✅', 'Navigateur & extension Carte Vitale',
           r.detail, { text: r.browser_label, color: 'success' })
 
       } else {
         // Extension missing — store browser for download block
+        detectedBrowser = r.browser
         extensionMissingBrowser = r.browser
         setCheck(brItem, 'error', '❌', 'Navigateur & extension Carte Vitale',
           r.detail, { text: 'Extension manquante', color: 'danger' })
@@ -119,6 +123,34 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+    // ── Version du navigateur par défaut ──────────────────────────────────────
+    let browserOutdated = false
+    let browserSlugForUpdate = null
+    if (detectedBrowser === 'chrome' || detectedBrowser === 'firefox') {
+      const vbrItem = addCheck(checksList, `Version de ${detectedBrowser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'}`, 'Lecture de la version installée…')
+      try {
+        const r = await invoke('check_browser_version', { browser: detectedBrowser })
+        if (!r.is_ok && r.installed !== '') {
+          browserOutdated = true
+          browserSlugForUpdate = detectedBrowser
+        }
+        const status = r.is_ok ? 'success' : (r.installed === '' ? 'warning' : 'warning')
+        const icon   = r.is_ok ? '✅' : '⚠️'
+        const badge  = r.is_ok
+          ? { text: `v${r.installed}`, color: 'success' }
+          : r.installed === ''
+            ? { text: 'Non détecté', color: 'warning' }
+            : { text: 'Mise à jour requise', color: 'warning' }
+        setCheck(vbrItem, status, icon,
+          `Version de ${r.browser_label}`, r.detail, badge)
+      } catch (e) {
+        setCheck(vbrItem, 'warning', '⚠️',
+          'Version du navigateur',
+          `La vérification de version n'a pas pu être lancée : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
         // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
@@ -126,6 +158,7 @@ export function renderAmelipro(container, navigate) {
     if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
     if (cnamOutdated)      addCnamDownloadBlock(footer)
     if (extensionMissingBrowser) addExtensionDownloadBlock(footer, extensionMissingBrowser)
+    if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -281,6 +314,52 @@ function addExtensionDownloadBlock(area, browser) {
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🧩 Réessayer'
+    }
+  })
+}
+
+// ── Browser update block ──────────────────────────────────────────────────────
+function addBrowserUpdateBlock(area, browser) {
+  const browserName = browser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'
+
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🔄</span>
+      <div>
+        <div class="repair-label">Mettre à jour ${browserName}</div>
+        <div class="repair-detail">Ouvre la page de mise à jour intégrée du navigateur</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="browser-update-btn">🔄 Mettre à jour ${browserName}</fluent-button>
+    <div class="browser-update-result hidden"></div>
+  `
+  area.insertBefore(block, area.firstChild)
+
+  const btn    = block.querySelector('.browser-update-btn')
+  const result = block.querySelector('.browser-update-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
+    try {
+      const r = await invoke('launch_browser_update', { browser })
+      if (r.ps_unavailable) {
+        result.className = 'browser-update-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🔄 Réessayer'
+      } else {
+        result.className = 'browser-update-result check-item status-success fade-up'
+        result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = `✅ ${browserName} ouvert`
+      }
+    } catch (e) {
+      result.className = 'browser-update-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible de lancer la mise à jour : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🔄 Réessayer'
     }
   })
 }

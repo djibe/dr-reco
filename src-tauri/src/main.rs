@@ -603,7 +603,7 @@ if ($found) { Write-Output "found" } else { Write-Output "not_found" }
                     browser_label: browser_label.into(),
                     extension_found: false,
                     extension_checked: false,
-                    detail: format!("Navigateur par défaut : {}. Impossible de vérifier l’extension — {}", browser_label, e),
+                    detail: format!("Navigateur par défaut : {}. Impossible de vérifier l\'extension — {}", browser_label, e),
                     ps_unavailable: true,
                 }),
                 PsResult::Ok(output, _) => {
@@ -653,6 +653,130 @@ if ($found) { Write-Output "found" } else { Write-Output "not_found" }
     }
 }
 
+
+// ─── Browser version check ────────────────────────────────────────────────────
+// Latest stable major versions as of March 2026:
+//   Chrome  → 146
+//   Firefox → 148
+// We compare only the major version (first segment) since that is what auto-update tracks.
+
+#[derive(Serialize, Deserialize)]
+struct BrowserVersionResult {
+    browser:        String,
+    browser_label:  String,
+    installed:      String,   // full version string, empty if not found
+    latest_major:   u32,
+    is_ok:          bool,
+    detail:         String,
+    ps_unavailable: bool,
+}
+
+#[tauri::command]
+fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String> {
+    let (browser_label, latest_major) = match browser.as_str() {
+        "chrome"  => ("Google Chrome",    146u32),
+        "firefox" => ("Mozilla Firefox",  148u32),
+        _         => return Err(format!("Navigateur non pris en charge : {}", browser)),
+    };
+
+    let installed: String = match browser.as_str() {
+        "chrome" => {
+            // HKCU\Software\Google\Chrome\BLBeacon → version
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            hkcu.open_subkey("Software\\Google\\Chrome\\BLBeacon")
+                .and_then(|k| k.get_value::<String, _>("version"))
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+        "firefox" => {
+            // HKLM\SOFTWARE\Mozilla\Mozilla Firefox → CurrentVersion
+            // Fallback to WOW6432Node on 64-bit
+            let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+            hklm.open_subkey("SOFTWARE\\Mozilla\\Mozilla Firefox")
+                .or_else(|_| hklm.open_subkey("SOFTWARE\\Wow6432Node\\Mozilla\\Mozilla Firefox"))
+                .and_then(|k| k.get_value::<String, _>("CurrentVersion"))
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+        _ => String::new(),
+    };
+
+    if installed.is_empty() {
+        return Ok(BrowserVersionResult {
+            browser: browser.clone(),
+            browser_label: browser_label.into(),
+            installed: String::new(),
+            latest_major,
+            is_ok: false,
+            detail: format!(
+                "Impossible de lire la version installée de {}. Le navigateur n'est peut-être pas installé ou n'a jamais été lancé.",
+                browser_label
+            ),
+            ps_unavailable: false,
+        });
+    }
+
+    // Parse major version from e.g. "136.0.7103.114" or "136.0" or "136 esr"
+    let major: u32 = installed
+        .split(|c: char| !c.is_ascii_digit())
+        .next()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+
+    let is_ok = major >= latest_major;
+    let detail = if is_ok {
+        format!(
+            "{} version {} — à jour (version majeure minimale : {}).",
+            browser_label, installed, latest_major
+        )
+    } else {
+        format!(
+            "{} version {} — obsolète. La version {} ou supérieure est recommandée. Mettez à jour le navigateur.",
+            browser_label, installed, latest_major
+        )
+    };
+
+    Ok(BrowserVersionResult {
+        browser: browser.clone(),
+        browser_label: browser_label.into(),
+        installed,
+        latest_major,
+        is_ok,
+        detail,
+        ps_unavailable: false,
+    })
+}
+
+// ─── Launch browser update ────────────────────────────────────────────────────
+#[tauri::command]
+fn launch_browser_update(browser: String) -> Result<CheckResult, String> {
+    let script = match browser.as_str() {
+        // Open Chrome's built-in update page
+        "chrome" => r#"Start-Process "chrome.exe" -ArgumentList "--chrome-frame","chrome://settings/help" -ErrorAction SilentlyContinue; Start-Process "chrome://settings/help" -ErrorAction SilentlyContinue"#,
+        // Open Firefox's built-in update preferences page
+        "firefox" => r#"Start-Process "firefox.exe" -ArgumentList "about:preferences#general" -ErrorAction SilentlyContinue"#,
+        other => return Err(format!("Navigateur non pris en charge : {}", other)),
+    };
+
+    let label = match browser.as_str() {
+        "chrome"  => "Google Chrome",
+        "firefox" => "Mozilla Firefox",
+        _         => &browser,
+    };
+
+    match powershell(script) {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de lancer la mise à jour de {} — {}", label, e)
+        )),
+        PsResult::Ok(_, _) => Ok(CheckResult::ok(format!(
+            "La page de mise à jour de {} a été ouverte. Suivez les instructions dans le navigateur pour terminer la mise à jour.",
+            label
+        ))),
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -672,6 +796,8 @@ fn main() {
             check_services_cnam,
             check_smartcard_reader,
             check_browser_and_extension,
+            check_browser_version,
+            launch_browser_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
