@@ -797,10 +797,6 @@ fn check_fast_startup() -> Result<CheckResult, String> {
     }
 }
 
-// ─── Windows Fast Startup ─────────────────────────────────────────────────────
-// HiberbootEnabled DWORD at:
-// HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
-// 1 = enabled, 0 = disabled, missing key = disabled
 const FAST_STARTUP_KEY: &str =
     "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power";
 
