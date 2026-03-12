@@ -29,7 +29,6 @@ export function renderWindows(container, navigate) {
   const checksList = container.querySelector('#checks-list')
   const repairArea = container.querySelector('#repair-actions')
 
-  // Cancellation token — replaced on each run
   let cancelled = false
 
   cancelBtn.addEventListener('click', () => {
@@ -39,7 +38,6 @@ export function renderWindows(container, navigate) {
   })
 
   launchBtn.addEventListener('click', async () => {
-    // Reset state
     cancelled = false
     cancelBtn.disabled = false
     cancelBtn.innerHTML = '✕ Annuler'
@@ -50,15 +48,13 @@ export function renderWindows(container, navigate) {
     checksList.innerHTML = ''
     repairArea.innerHTML = ''
 
-    let versionError = false
-    let sfcError     = false
+    let versionError      = false
+    let sfcError          = false
+    let chkdskError       = false
+    let avError           = false
+    let winreError        = false
     let fastStartupDisabled = false
-    let chkdskError  = false
-    let avError      = false
-    let winreError   = false
 
-    // Helper: check cancellation before each step
-    // Returns true if cancelled (caller should break)
     function wasCancelled(item, label) {
       if (!cancelled) return false
       setCheck(item, 'cancelled', '⊘', label,
@@ -108,7 +104,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 3. Storage type (SSD vs HDD) ─────────────────────────────────────────
+    // ── 3. Storage type ──────────────────────────────────────────────────────
     const stItem = addCheck(checksList, 'Type de stockage', 'Détection du type de disque (SSD/HDD)…')
     if (!wasCancelled(stItem, 'Type de stockage')) {
       try {
@@ -238,17 +234,45 @@ export function renderWindows(container, navigate) {
       }
     }
 
+    // ── 9. Santé de la batterie (portables uniquement) ────────────────────────
+    const batItem = addCheck(checksList, 'Santé de la batterie', 'Détection du type de machine…')
+    if (!wasCancelled(batItem, 'Santé de la batterie')) {
+      try {
+        const r = await invoke('check_battery_health')
+        if (r.ps_unavailable) {
+          setCheck(batItem, 'warning', '⚠️', 'Santé de la batterie',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (!r.is_laptop) {
+          batItem.remove()
+        } else if (!r.has_battery) {
+          setCheck(batItem, 'warning', '⚠️', 'Santé de la batterie',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          const pct    = r.health_pct
+          const status = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'error'
+          const icon   = pct >= 80 ? '✅' : pct >= 50 ? '⚠️' : '❌'
+          const bColor = pct >= 80 ? 'success' : pct >= 50 ? 'warning' : 'danger'
+          setCheck(batItem, status, icon, 'Santé de la batterie',
+            r.detail, { text: `${pct}%`, color: bColor })
+        }
+      } catch (e) {
+        setCheck(batItem, 'warning', '⚠️', 'Santé de la batterie',
+          `La vérification de la batterie n'a pas pu être lancée : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
     // ── Done ─────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer la vérification'
 
     if (!cancelled) {
-      if (versionError) addWindowsUpdateBlock(repairArea)
-      if (sfcError)     addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows',   detail: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
-      if (chkdskError)  addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
-      if (avError)      addDefenderBlock(repairArea)
-      if (winreError)   addWinreRepairBlock(repairArea)
+      if (versionError)       addWindowsUpdateBlock(repairArea)
+      if (sfcError)           addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows',   detail: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
+      if (chkdskError)        addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
+      if (avError)            addDefenderBlock(repairArea)
+      if (winreError)         addWinreRepairBlock(repairArea)
       if (fastStartupDisabled) addFastStartupBlock(repairArea)
     }
 
@@ -484,7 +508,7 @@ function addWindowsUpdateBlock(area) {
   })
 }
 
-// ── Fast Startup enable block ─────────────────────────────────────────────────
+// ── Fast startup enable block ─────────────────────────────────────────────────
 function addFastStartupBlock(area) {
   const block = document.createElement('div')
   block.className = 'repair-block fade-up'

@@ -779,42 +779,201 @@ fn launch_browser_update(browser: String) -> Result<CheckResult, String> {
 
 
 // ─── Windows Fast Startup ─────────────────────────────────────────────────────
-// Stored at HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
-// HiberbootEnabled DWORD: 1 = fast startup on, 0 = off, missing = off
+// Registry: HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power
+// Value: HiberbootEnabled  DWORD  1 = enabled, 0 = disabled (or key missing)
 #[tauri::command]
 fn check_fast_startup() -> Result<CheckResult, String> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let key = hklm
-        .open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power")
-        .map_err(|e| format!("Impossible de lire la clé Power : {}", e))?;
-
-    let enabled: u32 = key.get_value("HiberbootEnabled").unwrap_or(0);
-
-    if enabled == 1 {
-        Ok(CheckResult::ok("Démarrage rapide activé — les démarrages de Windows sont optimisés."))
-    } else {
-        Ok(CheckResult::err("Démarrage rapide désactivé. L'activer accélère le démarrage de Windows."))
+    match hklm.open_subkey("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power") {
+        Err(_) => Ok(CheckResult::err(
+            "Démarrage rapide désactivé (clé de registre introuvable)."
+        )),
+        Ok(key) => {
+            let value: u32 = key.get_value("HiberbootEnabled").unwrap_or(0);
+            if value == 1 {
+                Ok(CheckResult::ok("Démarrage rapide Windows activé — Le système démarre plus rapidement."))
+            } else {
+                Ok(CheckResult::err(
+                    "Démarrage rapide désactivé. L'activer accélère le démarrage de l'ordinateur."
+                ))
+            }
+        }
     }
 }
 
-const FAST_STARTUP_KEY: &str =
-    "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power";
-
 #[tauri::command]
 fn enable_fast_startup() -> Result<CheckResult, String> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    match hklm.open_subkey_with_flags(FAST_STARTUP_KEY, winreg::enums::KEY_SET_VALUE) {
-        Err(e) => Ok(CheckResult::unavailable(format!(
-            "Impossible d'ouvrir la clé de registre en écriture (droits administrateur requis) : {}", e
-        ))),
-        Ok(key) => match key.set_value("HiberbootEnabled", &1u32) {
-            Ok(_) => Ok(CheckResult::ok(
-                "Le démarrage rapide a été activé avec succès. Les changements prendront effet au prochain arrêt complet de l'ordinateur."
-            )),
-            Err(e) => Ok(CheckResult::unavailable(format!(
-                "Impossible d'écrire dans le registre : {}", e
-            ))),
-        },
+    // Enable hibernation (required for fast startup), then set the registry key
+    let script = r#"
+powercfg /hibernate on
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 1 -Type DWord -Force
+"#;
+    match powershell(script) {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible d'activer le démarrage rapide — {}", e)
+        )),
+        PsResult::Ok(_, code) => {
+            if code == 0 {
+                Ok(CheckResult::ok(
+                    "Démarrage rapide activé avec succès. Le changement sera effectif au prochain redémarrage."
+                ))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "L'activation du démarrage rapide a échoué (code {}). Des droits administrateur sont peut-être nécessaires.",
+                    code
+                )))
+            }
+        }
+    }
+}
+
+
+
+// ─── Battery health ───────────────────────────────────────────────────────────
+// Only runs on laptops. Detection: Win32_SystemEnclosure ChassisTypes contains
+// a portable value (8=Portable, 9=Laptop, 10=Notebook, 11=Hand Held,
+// 14=Sub Notebook, 30=Tablet, 31=Convertible, 32=Detachable).
+// Capacity data: powercfg /batteryreport /xml → parse DesignCapacity and
+// FullChargeCapacity from the XML. Ratio = FullCharge / Design * 100.
+
+#[derive(Serialize, Deserialize)]
+struct BatteryResult {
+    is_laptop:       bool,
+    has_battery:     bool,
+    design_mwh:      u64,
+    full_mwh:        u64,
+    health_pct:      u32,   // 0–100
+    is_ok:           bool,
+    detail:          String,
+    ps_unavailable:  bool,
+}
+
+#[tauri::command]
+fn check_battery_health() -> Result<BatteryResult, String> {
+    // ── Step 1: is this a laptop? ────────────────────────────────────────────
+    let laptop_script = r#"
+$chassis = (Get-CimInstance -ClassName Win32_SystemEnclosure -ErrorAction SilentlyContinue).ChassisTypes
+$portable = @(8,9,10,11,14,30,31,32)
+$isLaptop = $false
+foreach ($c in $chassis) { if ($portable -contains $c) { $isLaptop = $true } }
+if ($isLaptop) { Write-Output "laptop" } else { Write-Output "desktop" }
+"#;
+    let is_laptop = match powershell(laptop_script) {
+        PsResult::SpawnFailed(e) => return Ok(BatteryResult {
+            is_laptop: false, has_battery: false,
+            design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: true,
+            detail: format!("Impossible de détecter le type de machine — {}", e),
+            ps_unavailable: true,
+        }),
+        PsResult::Ok(output, _) => output.trim() == "laptop",
+    };
+
+    if !is_laptop {
+        return Ok(BatteryResult {
+            is_laptop: false, has_battery: false,
+            design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: true,
+            detail: String::new(), // JS skips display entirely when !is_laptop
+            ps_unavailable: false,
+        });
+    }
+
+    // ── Step 2: generate XML battery report and parse capacities ─────────────
+    let report_script = r#"
+$tmp = "$env:TEMP\dr_reco_battery.xml"
+powercfg /batteryreport /xml /output $tmp 2>$null | Out-Null
+if (-not (Test-Path $tmp)) { Write-Output "no_file"; exit 0 }
+try {
+    [xml]$xml = Get-Content $tmp -ErrorAction Stop
+    $batteries = $xml.BatteryReport.Batteries.Battery
+    if ($null -eq $batteries) { Write-Output "no_battery"; exit 0 }
+    # Handle single or multiple batteries
+    $design = 0; $full = 0
+    foreach ($b in @($batteries)) {
+        $design += [int64]$b.DesignCapacity
+        $full   += [int64]$b.FullChargeCapacity
+    }
+    Write-Output "$design|$full"
+} catch {
+    Write-Output "error|$_"
+} finally {
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+}
+"#;
+
+    match powershell(report_script) {
+        PsResult::SpawnFailed(e) => Ok(BatteryResult {
+            is_laptop: true, has_battery: false,
+            design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: false,
+            detail: format!("Impossible de générer le rapport batterie — {}", e),
+            ps_unavailable: true,
+        }),
+        PsResult::Ok(output, _) => {
+            let line = output.trim();
+            match line {
+                "no_file" => Ok(BatteryResult {
+                    is_laptop: true, has_battery: false,
+                    design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: false,
+                    detail: "Le rapport batterie n'a pas pu être généré. Des droits administrateur sont peut-être nécessaires.".into(),
+                    ps_unavailable: false,
+                }),
+                "no_battery" => Ok(BatteryResult {
+                    is_laptop: true, has_battery: false,
+                    design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: true,
+                    detail: "Aucune batterie détectée dans le rapport (ordinateur portable sur secteur uniquement ?).".into(),
+                    ps_unavailable: false,
+                }),
+                _ if line.starts_with("error|") => Ok(BatteryResult {
+                    is_laptop: true, has_battery: false,
+                    design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: false,
+                    detail: format!("Erreur lors de l'analyse du rapport : {}", &line[6..]),
+                    ps_unavailable: false,
+                }),
+                _ => {
+                    let parts: Vec<&str> = line.splitn(2, '|').collect();
+                    let design: u64 = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+                    let full:   u64 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+
+                    if design == 0 {
+                        return Ok(BatteryResult {
+                            is_laptop: true, has_battery: false,
+                            design_mwh: 0, full_mwh: 0, health_pct: 0, is_ok: false,
+                            detail: "Capacité nominale nulle — données batterie invalides.".into(),
+                            ps_unavailable: false,
+                        });
+                    }
+
+                    let health_pct = ((full as f64 / design as f64) * 100.0).round() as u32;
+                    let is_ok = health_pct >= 50;
+
+                    let condition = if health_pct >= 80 {
+                        "Bonne santé"
+                    } else if health_pct >= 50 {
+                        "Usure normale"
+                    } else {
+                        "Batterie fortement dégradée"
+                    };
+
+                    let detail = format!(
+                        "Santé batterie : {}% ({} mWh / {} mWh nominaux) — {}.",
+                        health_pct,
+                        full,
+                        design,
+                        condition
+                    );
+
+                    Ok(BatteryResult {
+                        is_laptop: true,
+                        has_battery: true,
+                        design_mwh: design,
+                        full_mwh: full,
+                        health_pct,
+                        is_ok,
+                        detail,
+                        ps_unavailable: false,
+                    })
+                }
+            }
+        }
     }
 }
 
@@ -841,6 +1000,7 @@ fn main() {
             launch_browser_update,
             check_fast_startup,
             enable_fast_startup,
+            check_battery_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
