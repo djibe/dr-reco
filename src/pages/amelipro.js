@@ -126,8 +126,9 @@ export function renderAmelipro(container, navigate) {
     // ── Version du navigateur par défaut ──────────────────────────────────────
     let browserOutdated = false
     let browserSlugForUpdate = null
-    if (detectedBrowser === 'chrome' || detectedBrowser === 'firefox') {
-      const vbrItem = addCheck(checksList, `Version de ${detectedBrowser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'}`, 'Lecture de la version installée…')
+    if (detectedBrowser === 'chrome' || detectedBrowser === 'firefox' || detectedBrowser === 'edge') {
+      const browserDisplayName = detectedBrowser === 'chrome' ? 'Google Chrome' : detectedBrowser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
+      const vbrItem = addCheck(checksList, `Version de ${browserDisplayName}`, 'Lecture de la version installée…')
       try {
         const r = await invoke('check_browser_version', { browser: detectedBrowser })
         if (!r.is_ok && r.installed !== '') {
@@ -276,12 +277,13 @@ function addCnamDownloadBlock(area) {
 const EXTENSION_URLS = {
   chrome:  'https://chromewebstore.google.com/detail/lecture-carte-vitale/kpjpglcbcgnblkigbedgaoegjbifejka?hl=fr',
   firefox: 'https://addons.mozilla.org/fr/firefox/addon/lecture-carte-vitale/',
+  edge:    'https://chromewebstore.google.com/detail/lecture-carte-vitale/kpjpglcbcgnblkigbedgaoegjbifejka',
 }
 
 function addExtensionDownloadBlock(area, browser) {
   const url         = EXTENSION_URLS[browser]
-  const browserName = browser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'
-  const store       = browser === 'chrome' ? 'Chrome Web Store' : 'Firefox Add-ons'
+  const browserName = browser === 'chrome' ? 'Google Chrome' : browser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
+  const store       = browser === 'firefox' ? 'Firefox Add-ons' : 'Chrome Web Store'
 
   const block = document.createElement('div')
   block.className = 'repair-block fade-up'
@@ -320,7 +322,7 @@ function addExtensionDownloadBlock(area, browser) {
 
 // ── Browser update block ──────────────────────────────────────────────────────
 function addBrowserUpdateBlock(area, browser) {
-  const browserName = browser === 'chrome' ? 'Google Chrome' : 'Mozilla Firefox'
+  const browserName = browser === 'chrome' ? 'Google Chrome' : browser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
 
   const block = document.createElement('div')
   block.className = 'repair-block fade-up'

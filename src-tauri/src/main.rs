@@ -631,8 +631,39 @@ if ($found) { Write-Output "found" } else { Write-Output "not_found" }
             }
         }
 
+        "edge" => {
+            // Edge supports Chrome Web Store extensions — same ID, dedicated registry path
+            const EXT_ID: &str = "kpjpglcbcgnblkigbedgaoegjbifejka";
+            let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+            let key_64 = format!("SOFTWARE\\Microsoft\\Edge\\Extensions\\{}", EXT_ID);
+            let key_32 = format!("SOFTWARE\\WOW6432Node\\Microsoft\\Edge\\Extensions\\{}", EXT_ID);
+            let found = hklm.open_subkey(&key_64).is_ok()
+                || hklm.open_subkey(&key_32).is_ok();
+
+            let detail = if found {
+                format!(
+                    "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" ({}) détectée.",
+                    browser_label, EXT_ID
+                )
+            } else {
+                format!(
+                    "Navigateur par défaut : {}. Extension \"Lecture Carte Vitale\" ({}) non trouvée.",
+                    browser_label, EXT_ID
+                )
+            };
+
+            Ok(BrowserResult {
+                browser: browser.into(),
+                browser_label: browser_label.into(),
+                extension_found: found,
+                extension_checked: true,
+                detail,
+                ps_unavailable: false,
+            })
+        }
+
         _ => {
-            // Edge, other, or unknown — report browser but skip extension check
+            // Other or unknown — skip extension check
             let detail = if browser == "unknown" {
                 "Impossible de détecter le navigateur par défaut.".into()
             } else {
@@ -674,8 +705,9 @@ struct BrowserVersionResult {
 #[tauri::command]
 fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String> {
     let (browser_label, latest_major) = match browser.as_str() {
-        "chrome"  => ("Google Chrome",    146u32),
-        "firefox" => ("Mozilla Firefox",  148u32),
+        "chrome"  => ("Google Chrome",   146u32),
+        "firefox" => ("Mozilla Firefox", 148u32),
+        "edge"    => ("Microsoft Edge",  134u32),
         _         => return Err(format!("Navigateur non pris en charge : {}", browser)),
     };
 
@@ -696,6 +728,15 @@ fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String
             hklm.open_subkey("SOFTWARE\\Mozilla\\Mozilla Firefox")
                 .or_else(|_| hklm.open_subkey("SOFTWARE\\Wow6432Node\\Mozilla\\Mozilla Firefox"))
                 .and_then(|k| k.get_value::<String, _>("CurrentVersion"))
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }
+        "edge" => {
+            // HKCU\Software\Microsoft\Edge\BLBeacon → version
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            hkcu.open_subkey("Software\\Microsoft\\Edge\\BLBeacon")
+                .and_then(|k| k.get_value::<String, _>("version"))
                 .unwrap_or_default()
                 .trim()
                 .to_string()
@@ -757,12 +798,15 @@ fn launch_browser_update(browser: String) -> Result<CheckResult, String> {
         "chrome" => r#"Start-Process "chrome.exe" -ArgumentList "--chrome-frame","chrome://settings/help" -ErrorAction SilentlyContinue; Start-Process "chrome://settings/help" -ErrorAction SilentlyContinue"#,
         // Open Firefox's built-in update preferences page
         "firefox" => r#"Start-Process "firefox.exe" -ArgumentList "about:preferences#general" -ErrorAction SilentlyContinue"#,
+        // Open Edge's built-in update page
+        "edge" => r#"Start-Process "msedge.exe" -ArgumentList "edge://settings/help" -ErrorAction SilentlyContinue"#,
         other => return Err(format!("Navigateur non pris en charge : {}", other)),
     };
 
     let label = match browser.as_str() {
         "chrome"  => "Google Chrome",
         "firefox" => "Mozilla Firefox",
+        "edge"    => "Microsoft Edge",
         _         => &browser,
     };
 
