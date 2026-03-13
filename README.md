@@ -1,6 +1,6 @@
 # Tauri + Vanilla
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+This template should help get you started developing with Tauri and Microsoft Fluent 3 Web components.
 
 ## Recommended IDE Setup
 

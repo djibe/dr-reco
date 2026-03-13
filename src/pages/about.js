@@ -18,7 +18,7 @@ export function renderAbout(container, navigate) {
 
       <p>
         <strong>Auteur :</strong> Jean-Baptiste Fron<br>
-        <strong>Licence :</strong> MIT — logiciel libre et gratuit
+        <strong>Licence :</strong> CC-BY-NC-SA-4.0 — logiciel libre et gratuit
       </p>
 
       <br>
@@ -31,7 +31,7 @@ export function renderAbout(container, navigate) {
       </fluent-button>
 
       <div class="about-divider"></div>
-      <p class="about-credit">Version 1.0.0</p>
+      <p class="about-credit">Version 0.1.0</p>
     </div>
   `
 

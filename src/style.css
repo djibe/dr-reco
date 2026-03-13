@@ -1,4 +1,4 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body {
   height: 100%;
@@ -53,11 +53,10 @@ html, body {
 
 /* ── Welcome ──────────────────────────────────── */
 .welcome-header {
-  text-align: center;
   margin-bottom: 36px;
   padding-top: 8px;
 }
-.welcome-header h1 {
+/*.welcome-header h1 {
   font-size: 36px;
   font-weight: 700;
   color: var(--colorBrandForeground1);
@@ -67,7 +66,7 @@ html, body {
 .welcome-header p {
   color: var(--colorNeutralForeground3);
   font-size: 15px;
-}
+}*/
 
 .cards-grid {
   display: grid;
@@ -154,7 +153,7 @@ html, body {
   gap: 12px;
   transition: border-color 0.2s;
 }
-.check-item.status-success { border-color: var(--colorStatusSuccessBorder1); background: var(--colorStatusSuccessBackground1); }
+.check-item.status-success {}
 .check-item.status-warning { border-color: var(--colorStatusWarningBorder1); background: var(--colorStatusWarningBackground1); }
 .check-item.status-error   { border-color: var(--colorStatusDangerBorder1);  background: var(--colorStatusDangerBackground1); }
 .check-item.status-running { border-color: var(--colorBrandStroke1); }

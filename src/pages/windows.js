@@ -9,7 +9,8 @@ export function renderWindows(container, navigate) {
     <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
 
     <div class="page-header" style="margin-top:12px">
-      <h2>🪟 Windows &amp; Maintenance</h2>
+      <img>🪟</img>
+      <h1>Windows &amp; Maintenance</h2>
       <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
     </div>
 
@@ -58,7 +59,7 @@ export function renderWindows(container, navigate) {
     function wasCancelled(item, label) {
       if (!cancelled) return false
       setCheck(item, 'cancelled', '⊘', label,
-        'Vérification annulée par l\'utilisateur.',
+        'Vérification annulée par l’utilisateur.',
         { text: 'Annulé', color: 'subtle' })
       return true
     }

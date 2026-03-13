@@ -14,36 +14,6 @@ function render() {
   const app = document.getElementById('app')
   app.innerHTML = ''
 
-  // ── Topbar ──────────────────────────────────────────────────────────────────
-  const topbar = document.createElement('div')
-  topbar.className = 'topbar'
-
-  const brand = document.createElement('button')
-  brand.className = 'topbar-brand'
-  brand.innerHTML = '🩺 Dr Reco'
-  brand.onclick = () => navigate('welcome')
-  topbar.appendChild(brand)
-
-  const pageTitles = {
-    windows:  'Windows & Maintenance',
-    amelipro: 'Outils Amelipro',
-    about:    'À propos',
-  }
-
-  if (currentPage !== 'welcome') {
-    const sep = document.createElement('span')
-    sep.className = 'topbar-sep'
-    sep.textContent = '/'
-    topbar.appendChild(sep)
-
-    const title = document.createElement('span')
-    title.className = 'topbar-title'
-    title.textContent = pageTitles[currentPage] || ''
-    topbar.appendChild(title)
-  }
-
-  app.appendChild(topbar)
-
   // ── Main ────────────────────────────────────────────────────────────────────
   const main = document.createElement('main')
   main.className = 'main-content'
