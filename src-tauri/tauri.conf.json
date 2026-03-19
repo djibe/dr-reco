@@ -20,7 +20,10 @@
         "minHeight": 560,
         "resizable": true,
         "fullscreen": false,
-        "center": true
+        "maximizable": true,
+        "center": true,
+        "scrollBarStyle": "fluentOverlay",
+        "shadow": true
       }
     ],
     "security": {

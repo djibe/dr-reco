@@ -7,5 +7,7 @@
     "core:default",
     "hwinfo:allow-os-info",
     "hwinfo:allow-ram-info"
-  ]
+  ],
+  "platforms": ["windows"],
+  "target": "windows"
 }

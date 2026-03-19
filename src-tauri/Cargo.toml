@@ -1,6 +1,5 @@
 [package]
 name = "dr-reco"
-version = "0.1.0"
 description = "Dr Reco - Logiciel gratuit pour les médecins généralistes"
 authors = ["Jean-Baptiste Fron"]
 license = "CC-BY-NC-SA-4.0"
