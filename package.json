@@ -9,7 +9,8 @@
     "generate:icons": "npm run tauri icon ./public/favicon.svg",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:build": "npm run tauri build"
+    "tauri:build": "npm run tauri build",
+    "tauri:update": "cd ./src-tauri && cargo outdated"
   },
   "dependencies": {
     "@fluentui/tokens": "^1.0.0-alpha.23",
