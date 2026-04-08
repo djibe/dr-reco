@@ -686,9 +686,7 @@ if ($found) { Write-Output "found" } else { Write-Output "not_found" }
 
 
 // ─── Browser version check ────────────────────────────────────────────────────
-// Latest stable major versions as of March 2026:
-//   Chrome  → 146
-//   Firefox → 148
+// Latest stable major versions
 // We compare only the major version (first segment) since that is what auto-update tracks.
 
 #[derive(Serialize, Deserialize)]
@@ -705,9 +703,9 @@ struct BrowserVersionResult {
 #[tauri::command]
 fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String> {
     let (browser_label, latest_major) = match browser.as_str() {
-        "chrome"  => ("Google Chrome",   146u32),
-        "firefox" => ("Mozilla Firefox", 148u32),
-        "edge"    => ("Microsoft Edge",  134u32),
+        "chrome"  => ("Google Chrome",   147u32),
+        "firefox" => ("Mozilla Firefox", 149u32),
+        "edge"    => ("Microsoft Edge",  146u32),
         _         => return Err(format!("Navigateur non pris en charge : {}", browser)),
     };
 
