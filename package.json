@@ -14,14 +14,14 @@
   },
   "dependencies": {
     "@fluentui/tokens": "^1.0.0-alpha.23",
-    "@fluentui/web-components": "^3.0.0-rc.10",
+    "@fluentui/web-components": "^3.0.0-rc.13",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "tauri-plugin-hwinfo": "^0.2.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1",
-    "vite": "^8.0.3"
+    "vite": "^8.0.8"
   },
   "engines": {
     "node": ">=22.0.0 <25.0.0"

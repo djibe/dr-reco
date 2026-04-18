@@ -1,5 +1,5 @@
 // import '@fluentui/web-components/'
-import 'https://unpkg.com/@fluentui/web-components@3.0.0-rc.10/dist/web-components.min.js'
+import 'https://unpkg.com/@fluentui/web-components@3.0.0-rc.13/dist/web-components.min.js'
 import { setTheme } from '@fluentui/web-components'
 import { webLightTheme } from '@fluentui/tokens'
 import './style.css'
