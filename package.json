@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:build": "npm run tauri build",
-    "tauri:update": "cd ./src-tauri && cargo outdated"
+    "tauri:update": "cd ./src-tauri && cargo update"
   },
   "dependencies": {
     "@fluentui/tokens": "^1.0.0-alpha.23",
