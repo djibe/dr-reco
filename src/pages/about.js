@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getVersion } from '@tauri-apps/api/app'
 
-export function renderAbout(container, navigate) {
+export async function renderAbout(container, navigate) {
+  const appVersion = await getVersion();
+
   container.innerHTML = `
     <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
 
@@ -31,7 +34,7 @@ export function renderAbout(container, navigate) {
       </fluent-button>
 
       <div class="about-divider"></div>
-      <p class="about-credit">Version 0.1.0</p>
+      <p class="about-credit">Version ${appVersion}</p>
     </div>
   `
 
