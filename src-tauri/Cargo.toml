@@ -4,7 +4,7 @@ description = "Dr Reco - Logiciel gratuit pour les médecins généralistes"
 authors = ["Jean-Baptiste Fron"]
 license = "CC-BY-NC-SA-4.0"
 repository = ""
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.93"
 
@@ -26,6 +26,7 @@ tauri-plugin-hwinfo = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 winreg = "0.56"
+tauri-plugin-shell = "2.3"
 
 [profile.release]
 panic = "abort"
