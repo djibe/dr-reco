@@ -30,8 +30,7 @@ export function renderAmelipro(container, navigate) {
     // ── Cryptolib CPS ────────────────────────────────────────────────────────
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     let cryptolibOutdated = false
-    let extensionMissingBrowser = null
-    let detectedBrowser = null
+
     try {
       const r = await invoke('check_cryptolib_version')
       cryptolibOutdated = !r.is_ok && !r.not_found
@@ -86,6 +85,8 @@ export function renderAmelipro(container, navigate) {
     }
 
         // ── Navigateur & extension Lecture Carte Vitale ──────────────────────────
+    let detectedBrowser = null
+    let extensionMissingBrowser = null
     const brItem = addCheck(checksList, 'Navigateur & extension Carte Vitale', 'Détection du navigateur par défaut…')
     try {
       const r = await invoke('check_browser_and_extension')
@@ -152,6 +153,27 @@ export function renderAmelipro(container, navigate) {
       }
     }
 
+    // ── Mise en veille sélective USB ─────────────────────────────────────────
+    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d’alimentation…')
+    try {
+      const r = await invoke('check_usb_suspend')
+      if (r.not_found) {
+        usbItem.remove()
+      } else if (r.ps_unavailable) {
+        setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        usbSuspendActive = !r.is_ok
+        setCheck(usbItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Mise en veille sélective USB', r.detail,
+          r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
         // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
@@ -160,6 +182,7 @@ export function renderAmelipro(container, navigate) {
     if (cnamOutdated)      addCnamDownloadBlock(footer)
     if (extensionMissingBrowser) addExtensionDownloadBlock(footer, extensionMissingBrowser)
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
+    if (usbSuspendActive) addUsbSuspendBlock(footer)
 
     const homeBtn = document.createElement('fluent-button')
     homeBtn.setAttribute('appearance', 'secondary')
@@ -362,6 +385,56 @@ function addBrowserUpdateBlock(area, browser) {
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible de lancer la mise à jour : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🔄 Réessayer'
+    }
+  })
+}
+
+// ── USB Selective Suspend disable block ───────────────────────────────────────
+let usbSuspendActive = false
+function addUsbSuspendBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">🔌</span>
+      <div>
+        <div class="repair-label">Désactiver la mise en veille sélective USB</div>
+        <div class="repair-detail">powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="usb-btn">🔌 Désactiver la mise en veille USB</fluent-button>
+    <div class="usb-result hidden"></div>
+  `
+  area.insertBefore(block, area.firstChild)
+
+  const btn    = block.querySelector('.usb-btn')
+  const result = block.querySelector('.usb-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Application en cours…'
+    result.className = 'usb-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Modification du plan d'alimentation…</div></div>`
+
+    try {
+      const r = await invoke('disable_usb_suspend')
+      if (r.ps_unavailable) {
+        result.className = 'usb-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🔌 Réessayer'
+      } else {
+        result.className = `usb-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Mise en veille USB désactivée' : '⚠️ Modification avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'usb-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🔌 Réessayer'
     }
   })
 }
