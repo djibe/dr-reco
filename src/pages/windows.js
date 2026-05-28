@@ -189,7 +189,27 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 6. CHKDSK ────────────────────────────────────────────────────────────
+    // ── 6. Nettoyage du disque ────────────────────────────────────────────────
+    const dcItem = addCheck(checksList, 'Nettoyage du disque C:', 'Suppression des fichiers temporaires…')
+    if (!wasCancelled(dcItem, 'Nettoyage du disque C:')) {
+      try {
+        const r = await invoke('run_disk_cleanup')
+        if (r.ps_unavailable) {
+          setCheck(dcItem, 'warning', '⚠️', 'Nettoyage du disque C:',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          setCheck(dcItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Nettoyage du disque C:', r.detail,
+            r.is_ok ? { text: 'Effectué', color: 'success' } : { text: 'Erreur', color: 'warning' })
+        }
+      } catch (e) {
+        setCheck(dcItem, 'warning', '⚠️', 'Nettoyage du disque C:',
+          `Le nettoyage du disque n'a pas pu être lancé : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
+    // ── 7. CHKDSK ────────────────────────────────────────────────────────────
     const cItem = addCheck(checksList, 'Santé du disque C: (CHKDSK)', 'Analyse du disque en cours…')
     if (!wasCancelled(cItem, 'Santé du disque C: (CHKDSK)')) {
       try {
@@ -210,7 +230,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 7. Antivirus ─────────────────────────────────────────────────────────
+    // ── 8. Antivirus ─────────────────────────────────────────────────────────
     const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…')
     if (!wasCancelled(avItem, 'Antivirus')) {
       try {
@@ -241,7 +261,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 8. Démarrage rapide ───────────────────────────────────────────────────
+    // ── 9. Démarrage rapide ───────────────────────────────────────────────────
     const fsItem = addCheck(checksList, 'Démarrage rapide Windows', 'Lecture du registre…')
     if (!wasCancelled(fsItem, 'Démarrage rapide Windows')) {
       try {
@@ -257,7 +277,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 9. Santé de la batterie (portables uniquement) ────────────────────────
+    // ── 10. Santé de la batterie (portables uniquement) ────────────────────────
     const batItem = addCheck(checksList, 'Santé de la batterie', 'Détection du type de machine…')
     if (!wasCancelled(batItem, 'Santé de la batterie')) {
       try {
@@ -285,7 +305,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 10. Récupération machine rapide (QMR) ─────────────────────────────────
+    // ── 11. Récupération machine rapide (QMR) ─────────────────────────────────
     const qmrItem = addCheck(checksList, 'Récupération machine rapide (QMR)', 'Lecture de la configuration…')
     if (!wasCancelled(qmrItem, 'Récupération machine rapide (QMR)')) {
       try {

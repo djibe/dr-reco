@@ -132,6 +132,34 @@ async fn run_sfc_check(app: tauri::AppHandle) -> Result<CheckResult, String> {
     }
 }
 
+
+// ─── Disk Cleanup ─────────────────────────────────────────────────────────────
+#[tauri::command]
+async fn run_disk_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    match app.shell()
+        .command("cleanmgr")
+        .args(["/D", "C", "/LOWDISK"])
+        .output()
+        .await
+    {
+        Err(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de lancer le nettoyage du disque — {}", e)
+        )),
+        Ok(output) => {
+            let code = output.status.code().unwrap_or(-1);
+            if code == 0 {
+                Ok(CheckResult::ok("Nettoyage du disque C: effectué avec succès."))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "Le nettoyage du disque a retourné le code {}. Des droits administrateur sont peut-être nécessaires.",
+                    code
+                )))
+            }
+        }
+    }
+}
+
+
 // ─── CHKDSK C: ───────────────────────────────────────────────────────────────
 #[tauri::command]
 async fn run_chkdsk(app: tauri::AppHandle) -> Result<CheckResult, String> {
@@ -967,6 +995,7 @@ fn main() {
         .plugin(tauri_plugin_hwinfo::init())
         .invoke_handler(tauri::generate_handler![
             run_sfc_check,
+            run_disk_cleanup,
             run_chkdsk,
             check_cryptolib_version,
             open_url,
