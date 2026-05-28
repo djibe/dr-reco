@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { notify } from '../notify.js'
 
 export function renderAmelipro(container, navigate) {
   container.innerHTML = `
@@ -30,7 +31,11 @@ export function renderAmelipro(container, navigate) {
     // ── Cryptolib CPS ────────────────────────────────────────────────────────
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     let cryptolibOutdated = false
-
+    let usbSuspendActive = false
+    let extensionMissingBrowser = null
+    let detectedBrowser = null
+    let browserOutdated = false
+    let browserSlugForUpdate = null
     try {
       const r = await invoke('check_cryptolib_version')
       cryptolibOutdated = !r.is_ok && !r.not_found
@@ -85,8 +90,6 @@ export function renderAmelipro(container, navigate) {
     }
 
         // ── Navigateur & extension Lecture Carte Vitale ──────────────────────────
-    let detectedBrowser = null
-    let extensionMissingBrowser = null
     const brItem = addCheck(checksList, 'Navigateur & extension Carte Vitale', 'Détection du navigateur par défaut…')
     try {
       const r = await invoke('check_browser_and_extension')
@@ -125,8 +128,6 @@ export function renderAmelipro(container, navigate) {
     }
 
     // ── Version du navigateur par défaut ──────────────────────────────────────
-    let browserOutdated = false
-    let browserSlugForUpdate = null
     if (detectedBrowser === 'chrome' || detectedBrowser === 'firefox' || detectedBrowser === 'edge') {
       const browserDisplayName = detectedBrowser === 'chrome' ? 'Google Chrome' : detectedBrowser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
       const vbrItem = addCheck(checksList, `Version de ${browserDisplayName}`, 'Lecture de la version installée…')
@@ -177,6 +178,13 @@ export function renderAmelipro(container, navigate) {
         // ── Done ─────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
+
+    const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive].filter(Boolean).length
+    if (issueCount === 0) {
+      notify('Dr Reco — AmeliPro', '✅ Vérification terminée — Aucun problème détecté.')
+    } else {
+      notify('Dr Reco — AmeliPro', `⚠️ Vérification terminée — ${issueCount} problème${issueCount > 1 ? 's' : ''} détecté${issueCount > 1 ? 's' : ''}.`)
+    }
 
     if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
     if (cnamOutdated)      addCnamDownloadBlock(footer)
@@ -390,7 +398,6 @@ function addBrowserUpdateBlock(area, browser) {
 }
 
 // ── USB Selective Suspend disable block ───────────────────────────────────────
-let usbSuspendActive = false
 function addUsbSuspendBlock(area) {
   const block = document.createElement('div')
   block.className = 'repair-block fade-up'

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
+import { notify } from '../notify.js'
 
 const MIN_BUILD  = 26200
 const MIN_RAM_MB = 16 * 1024
@@ -312,6 +313,15 @@ export function renderWindows(container, navigate) {
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer la vérification'
+
+    if (!cancelled) {
+      const issueCount = [versionError, sfcError, chkdskError, avError, winreError, fastStartupDisabled, qmrDisabled].filter(Boolean).length
+      if (issueCount === 0) {
+        notify('Dr Reco — Windows', '✅ Vérification terminée — Aucun problème détecté.')
+      } else {
+        notify('Dr Reco — Windows', `⚠️ Vérification terminée — ${issueCount} problème${issueCount > 1 ? 's' : ''} détecté${issueCount > 1 ? 's' : ''}.`)
+      }
+    }
 
     if (!cancelled) {
       if (versionError)       addWindowsUpdateBlock(repairArea)
