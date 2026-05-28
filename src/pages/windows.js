@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 
 const MIN_BUILD  = 26200
-const MIN_RAM_MB = 15 * 1024
+const MIN_RAM_MB = 16 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
@@ -55,13 +55,34 @@ export function renderWindows(container, navigate) {
     let avError           = false
     let winreError        = false
     let fastStartupDisabled = false
+    let qmrDisabled = false
 
     function wasCancelled(item, label) {
       if (!cancelled) return false
       setCheck(item, 'cancelled', '⊘', label,
-        'Vérification annulée par l’utilisateur.',
+        'Vérification annulée par l\'utilisateur.',
         { text: 'Annulé', color: 'subtle' })
       return true
+    }
+
+    // ── 0. Point de restauration Windows ────────────────────────────────────────
+    const rpItem = addCheck(checksList, 'Point de restauration Windows', 'Création d’un point de restauration…')
+    if (!wasCancelled(rpItem, 'Point de restauration Windows')) {
+      try {
+        const r = await invoke('create_restore_point')
+        if (r.ps_unavailable) {
+          setCheck(rpItem, 'warning', '⚠️', 'Point de restauration Windows',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          setCheck(rpItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Point de restauration Windows', r.detail,
+            r.is_ok ? { text: 'Créé', color: 'success' } : { text: 'Non créé', color: 'warning' })
+        }
+      } catch (e) {
+        setCheck(rpItem, 'warning', '⚠️', 'Point de restauration Windows',
+          `Le point de restauration n'a pas pu être créé : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
     }
 
     // ── 1. Windows version ───────────────────────────────────────────────────
@@ -263,6 +284,30 @@ export function renderWindows(container, navigate) {
       }
     }
 
+    // ── 10. Récupération machine rapide (QMR) ─────────────────────────────────
+    const qmrItem = addCheck(checksList, 'Récupération machine rapide (QMR)', 'Lecture de la configuration…')
+    if (!wasCancelled(qmrItem, 'Récupération machine rapide (QMR)')) {
+      try {
+        const r = await invoke('check_qmr')
+        if (r.not_found) {
+          // Feature not available on this Windows build — remove silently like desktop battery
+          qmrItem.remove()
+        } else if (r.ps_unavailable) {
+          setCheck(qmrItem, 'warning', '⚠️', 'Récupération machine rapide (QMR)',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          qmrDisabled = !r.is_ok
+          setCheck(qmrItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Récupération machine rapide (QMR)', r.detail,
+            r.is_ok ? { text: 'Activée', color: 'success' } : { text: 'Désactivée', color: 'warning' })
+        }
+      } catch (e) {
+        setCheck(qmrItem, 'warning', '⚠️', 'Récupération machine rapide (QMR)',
+          `La vérification n'a pas pu être lancée : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
     // ── Done ─────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
@@ -275,6 +320,7 @@ export function renderWindows(container, navigate) {
       if (avError)            addDefenderBlock(repairArea)
       if (winreError)         addWinreRepairBlock(repairArea)
       if (fastStartupDisabled) addFastStartupBlock(repairArea)
+      if (qmrDisabled)         addQmrBlock(repairArea)
     }
 
     const homeBtn = document.createElement('fluent-button')
@@ -554,6 +600,55 @@ function addFastStartupBlock(area) {
       result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '⚡ Réessayer'
+    }
+  })
+}
+
+// ── Quick Machine Recovery enable block ───────────────────────────────────────
+function addQmrBlock(area) {
+  const block = document.createElement('div')
+  block.className = 'repair-block fade-up'
+  block.innerHTML = `
+    <div class="repair-info">
+      <span class="repair-icon">☁️</span>
+      <div>
+        <div class="repair-label">Activer la récupération machine rapide</div>
+        <div class="repair-detail">reagentc /setrecoverysettings — CloudRemediation + AutoRemediation</div>
+      </div>
+    </div>
+    <fluent-button appearance="primary" class="qmr-btn">☁️ Activer la récupération machine rapide</fluent-button>
+    <div class="qmr-result hidden"></div>
+  `
+  area.appendChild(block)
+
+  const btn    = block.querySelector('.qmr-btn')
+  const result = block.querySelector('.qmr-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
+    result.className = 'qmr-result check-item status-running fade-up'
+    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Configuration de la récupération machine rapide…</div></div>`
+
+    try {
+      const r = await invoke('enable_qmr')
+      if (r.ps_unavailable) {
+        result.className = 'qmr-result check-item status-warning fade-up'
+        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '☁️ Réessayer'
+      } else {
+        result.className = `qmr-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `
+          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
+          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Récupération machine rapide activée' : '⚠️ Activation avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'qmr-result check-item status-warning fade-up'
+      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '☁️ Réessayer'
     }
   })
 }

@@ -659,6 +659,64 @@ async fn launch_browser_update(app: tauri::AppHandle, browser: String) -> Result
     }
 }
 
+
+// ─── System Restore point ─────────────────────────────────────────────────────
+// Creates a restore point before running any repair operations.
+// Requires the "System Protection" service (SRSVC) to be running and at least
+// one drive to have protection enabled.  Silently succeeds on systems where
+// System Restore is disabled so the rest of the checks can still proceed.
+#[tauri::command]
+async fn create_restore_point(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    // Checkpoint type 12 = MODIFY_SETTINGS, event type 100 = BEGIN_SYSTEM_CHANGE
+    let script = r#"
+$svc = Get-Service -Name SRSVC -ErrorAction SilentlyContinue
+if ($null -eq $svc -or $svc.Status -ne 'Running') {
+    # Try to start the service (requires admin)
+    Start-Service SRSVC -ErrorAction SilentlyContinue | Out-Null
+    Start-Sleep -Seconds 2
+}
+try {
+    $cp = (Get-WmiObject -Namespace "root\default" -Class "SystemRestore" -ErrorAction Stop)
+    $result = [System.Management.ManagementClass]::new("root\default", "SystemRestore", $null).InvokeMethod(
+        "CreateRestorePoint",
+        @("Dr Reco — vérification système", 12, 100)
+    )
+    if ($result -eq 0) {
+        Write-Output "ok"
+    } else {
+        Write-Output "code=$result"
+    }
+} catch {
+    Write-Output "error=$_"
+}
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de créer un point de restauration — {}", e)
+        )),
+        PsResult::Ok(output, _) => {
+            let line = output.trim();
+            if line == "ok" {
+                Ok(CheckResult::ok(
+                    "Point de restauration Windows créé — \"Dr Reco — vérification système\"."
+                ))
+            } else if line.starts_with("error=") || line.starts_with("code=") {
+                // System Restore may be disabled on this machine — non-blocking
+                Ok(CheckResult { is_ok: false,
+                    detail: format!(
+                        "Point de restauration non créé (la protection du système est peut-être désactivée). Résultat : {}",
+                        &line[line.find('=').map(|i| i+1).unwrap_or(0)..]
+                    ),
+                    not_found: false, ps_unavailable: false })
+            } else {
+                Ok(CheckResult { is_ok: false,
+                    detail: "Point de restauration non créé (la protection du système est peut-être désactivée sur ce poste).".into(),
+                    not_found: false, ps_unavailable: false })
+            }
+        }
+    }
+}
+
 // ─── Windows Fast Startup ─────────────────────────────────────────────────────
 #[tauri::command]
 fn check_fast_startup() -> Result<CheckResult, String> {
@@ -923,6 +981,7 @@ fn main() {
             check_browser_and_extension,
             check_browser_version,
             launch_browser_update,
+            create_restore_point,
             check_fast_startup,
             enable_fast_startup,
             check_battery_health,
