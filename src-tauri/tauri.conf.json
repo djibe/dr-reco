@@ -23,7 +23,8 @@
         "maximizable": true,
         "center": true,
         "scrollBarStyle": "fluentOverlay",
-        "shadow": true
+        "shadow": true,
+        "theme": "Dark"
       }
     ],
     "security": {
