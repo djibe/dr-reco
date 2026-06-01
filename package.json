@@ -1,7 +1,8 @@
 {
   "name": "dr-reco",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "description": "Assistant de diagnostic et maintenance informatique pour cabinets médicaux",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,8 +14,6 @@
     "tauri:update": "cd ./src-tauri && cargo update"
   },
   "dependencies": {
-    "@fluentui/tokens": "^1.0.0-alpha.23",
-    "@fluentui/web-components": "^3.0.0-rc.20",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-notification": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.3.5",
@@ -27,5 +26,13 @@
   "engines": {
     "node": ">=22.0.0 <25.0.0"
   },
-  "license": "CC-BY-NC-SA-4.0"
+  "author": "Jean-Baptiste FRON",
+  "license": "CC-BY-NC-SA-4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/djibe/dr-reco.git"
+  },
+  "bugs": {
+    "url": "https://github.com/djibe/dr-reco/issues"
+  }
 }

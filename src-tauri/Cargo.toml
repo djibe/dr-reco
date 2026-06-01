@@ -1,10 +1,10 @@
 [package]
 name = "dr-reco"
-description = "Dr Reco - Logiciel gratuit pour les médecins généralistes"
+description = "Dr Reco - Assistant de diagnostic et maintenance informatique pour cabinets médicaux"
 authors = ["Jean-Baptiste Fron"]
 license = "CC-BY-NC-SA-4.0"
 repository = ""
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.93"
 

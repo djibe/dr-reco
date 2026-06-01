@@ -10,13 +10,43 @@ export function navigate(page) {
   render()
 }
 
+const pageTitles = {
+  windows:  'Windows & Maintenance',
+  amelipro: 'Outils Amelipro',
+  about:    'À propos',
+}
+
 function render() {
   const app = document.getElementById('app')
   app.innerHTML = ''
 
-  // ── Main ────────────────────────────────────────────────────────────────────
+  // ── Navbar ───────────────────────────────────────────────────────────────────
+  const navbar = document.createElement('nav')
+  navbar.className = 'dr-navbar'
+
+  const brand = document.createElement('button')
+  brand.className = 'dr-navbar-brand'
+  brand.innerHTML = '🩺 Dr Reco'
+  brand.onclick = () => navigate('welcome')
+  navbar.appendChild(brand)
+
+  if (currentPage !== 'welcome') {
+    const sep = document.createElement('span')
+    sep.className = 'dr-navbar-sep'
+    sep.textContent = '/'
+    navbar.appendChild(sep)
+
+    const title = document.createElement('span')
+    title.className = 'dr-navbar-title'
+    title.textContent = pageTitles[currentPage] || ''
+    navbar.appendChild(title)
+  }
+
+  app.appendChild(navbar)
+
+  // ── Main ─────────────────────────────────────────────────────────────────────
   const main = document.createElement('main')
-  main.className = 'main-content'
+  main.className = 'dr-main'
 
   switch (currentPage) {
     case 'welcome':  renderWelcome(main, navigate);  break

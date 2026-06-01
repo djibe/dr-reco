@@ -7,21 +7,22 @@ const MIN_RAM_MB = 16 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
-    <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
+    <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
 
-    <div class="page-header" style="margin-top:12px">
-      <img>🪟</img>
-      <h1>Windows &amp; Maintenance</h2>
+    <div class="dr-page-header">
+      <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" heigh="24" fill-rule="evenodd" clip-rule="evenodd" image-rendering="optimizeQuality" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" viewBox="0 0 512 512.02">
+            <path fill="#0078d4" fill-rule="nonzero" d="M0 512.02h242.686V269.335H0zm0-269.334h242.686V0H0zm269.314 0H512V0H269.314zm0 269.334H512V269.335H269.314z"/>
+          </svg> Windows &amp; Maintenance</h2>
       <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
     </div>
 
-    <div class="btn-row">
-      <fluent-button appearance="primary" id="launch-btn">▶ Lancer la vérification</fluent-button>
-      <fluent-button appearance="secondary" id="cancel-btn" style="display:none">✕ Annuler</fluent-button>
+    <div class="dr-btn-row">
+      <button class="btn-dr-primary" id="launch-btn">▶ Lancer la vérification</button>
+      <button class="btn-dr-secondary" id="cancel-btn" style="display:none">✕ Annuler</button>
     </div>
 
-    <div class="checks-list"    id="checks-list"></div>
-    <div class="repair-actions" id="repair-actions"></div>
+    <div class="dr-checks" id="checks-list"></div>
+    <div class="dr-repairs" id="repair-actions"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
@@ -46,17 +47,17 @@ export function renderWindows(container, navigate) {
     cancelBtn.style.display = ''
 
     launchBtn.disabled = true
-    launchBtn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Vérification en cours…'
+    launchBtn.innerHTML = '<span class="dr-spinner"></span> Vérification en cours…'
     checksList.innerHTML = ''
     repairArea.innerHTML = ''
 
-    let versionError      = false
-    let sfcError          = false
-    let chkdskError       = false
-    let avError           = false
-    let winreError        = false
+    let versionError       = false
+    let sfcError           = false
+    let chkdskError        = false
+    let avError            = false
+    let winreError         = false
     let fastStartupDisabled = false
-    let qmrDisabled = false
+    let qmrDisabled        = false
 
     function wasCancelled(item, label) {
       if (!cancelled) return false
@@ -66,8 +67,8 @@ export function renderWindows(container, navigate) {
       return true
     }
 
-    // ── 0. Point de restauration Windows ────────────────────────────────────────
-    const rpItem = addCheck(checksList, 'Point de restauration Windows', 'Création d’un point de restauration…')
+    // ── 0. Point de restauration ──────────────────────────────────────────────
+    const rpItem = addCheck(checksList, 'Point de restauration Windows', 'Création d\'un point de restauration…')
     if (!wasCancelled(rpItem, 'Point de restauration Windows')) {
       try {
         const r = await invoke('create_restore_point')
@@ -86,7 +87,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 1. Windows version ───────────────────────────────────────────────────
+    // ── 1. Windows version ────────────────────────────────────────────────────
     const vItem = addCheck(checksList, 'Version de Windows', 'Récupération des informations système…')
     if (!wasCancelled(vItem, 'Version de Windows')) {
       try {
@@ -107,7 +108,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 2. RAM ───────────────────────────────────────────────────────────────
+    // ── 2. RAM ────────────────────────────────────────────────────────────────
     const rItem = addCheck(checksList, 'Mémoire vive (RAM)', 'Récupération de la taille mémoire…')
     if (!wasCancelled(rItem, 'Mémoire vive (RAM)')) {
       try {
@@ -127,7 +128,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 3. Storage type ──────────────────────────────────────────────────────
+    // ── 3. Storage type ───────────────────────────────────────────────────────
     const stItem = addCheck(checksList, 'Type de stockage', 'Détection du type de disque (SSD/HDD)…')
     if (!wasCancelled(stItem, 'Type de stockage')) {
       try {
@@ -147,7 +148,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 4. WinRE ─────────────────────────────────────────────────────────────
+    // ── 4. WinRE ──────────────────────────────────────────────────────────────
     const winreItem = addCheck(checksList, 'Windows Recovery (WinRE)', 'Vérification de l\'état de la partition de récupération…')
     if (!wasCancelled(winreItem, 'Windows Recovery (WinRE)')) {
       try {
@@ -168,7 +169,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 5. SFC ───────────────────────────────────────────────────────────────
+    // ── 5. SFC ────────────────────────────────────────────────────────────────
     const sItem = addCheck(checksList, 'Intégrité des fichiers système (SFC)', 'Analyse en cours — peut prendre plusieurs minutes…')
     if (!wasCancelled(sItem, 'Intégrité des fichiers système (SFC)')) {
       try {
@@ -209,7 +210,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 7. CHKDSK ────────────────────────────────────────────────────────────
+    // ── 7. CHKDSK ─────────────────────────────────────────────────────────────
     const cItem = addCheck(checksList, 'Santé du disque C: (CHKDSK)', 'Analyse du disque en cours…')
     if (!wasCancelled(cItem, 'Santé du disque C: (CHKDSK)')) {
       try {
@@ -230,7 +231,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 8. Antivirus ─────────────────────────────────────────────────────────
+    // ── 8. Antivirus ──────────────────────────────────────────────────────────
     const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…')
     if (!wasCancelled(avItem, 'Antivirus')) {
       try {
@@ -277,7 +278,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 10. Santé de la batterie (portables uniquement) ────────────────────────
+    // ── 10. Santé de la batterie (portables uniquement) ───────────────────────
     const batItem = addCheck(checksList, 'Santé de la batterie', 'Détection du type de machine…')
     if (!wasCancelled(batItem, 'Santé de la batterie')) {
       try {
@@ -311,7 +312,6 @@ export function renderWindows(container, navigate) {
       try {
         const r = await invoke('check_qmr')
         if (r.not_found) {
-          // Feature not available on this Windows build — remove silently like desktop battery
           qmrItem.remove()
         } else if (r.ps_unavailable) {
           setCheck(qmrItem, 'warning', '⚠️', 'Récupération machine rapide (QMR)',
@@ -329,7 +329,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── Done ─────────────────────────────────────────────────────────────────
+    // ── Done ──────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer la vérification'
@@ -341,344 +341,166 @@ export function renderWindows(container, navigate) {
       } else {
         notify('Dr Reco — Windows', `⚠️ Vérification terminée — ${issueCount} problème${issueCount > 1 ? 's' : ''} détecté${issueCount > 1 ? 's' : ''}.`)
       }
-    }
 
-    if (!cancelled) {
-      if (versionError)       addWindowsUpdateBlock(repairArea)
-      if (sfcError)           addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows',   detail: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
-      if (chkdskError)        addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', detail: 'chkdsk C: /f /r', kind: 'chkdsk' })
-      if (avError)            addDefenderBlock(repairArea)
-      if (winreError)         addWinreRepairBlock(repairArea)
+      if (versionError)        addWindowsUpdateBlock(repairArea)
+      if (sfcError)            addRepairBlock(repairArea, { icon: '🛠️', label: 'Réparer Windows',   cmd: 'dism /online /cleanup-image /restorehealth', kind: 'sfc' })
+      if (chkdskError)         addRepairBlock(repairArea, { icon: '💾', label: 'Réparer le disque', cmd: 'chkdsk C: /f /r', kind: 'chkdsk' })
+      if (avError)             addDefenderBlock(repairArea)
+      if (winreError)          addWinreRepairBlock(repairArea)
       if (fastStartupDisabled) addFastStartupBlock(repairArea)
       if (qmrDisabled)         addQmrBlock(repairArea)
     }
 
-    const homeBtn = document.createElement('fluent-button')
-    homeBtn.setAttribute('appearance', 'secondary')
-    homeBtn.style.marginTop = '16px'
+    const homeBtn = document.createElement('button')
+    homeBtn.className = 'btn-dr-secondary mt-3'
     homeBtn.innerHTML = '🏠 Retour à l\'accueil'
     homeBtn.onclick = () => navigate('welcome')
     repairArea.appendChild(homeBtn)
   })
 }
 
-// ── Check item helpers ────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function badgeHtml({ text, color }) {
+  const cls = color === 'success' ? 'dr-badge-success'
+            : color === 'warning' ? 'dr-badge-warning'
+            : color === 'danger'  ? 'dr-badge-danger'
+            : color === 'info'    ? 'dr-badge-info'
+            : 'dr-badge-subtle'
+  return `<span class="dr-badge ${cls}">${text}</span>`
+}
+
 function addCheck(list, label, detail) {
   const item = document.createElement('div')
-  item.className = 'check-item status-running fade-up'
+  item.className = 'dr-check status-running fade-up'
   item.innerHTML = `
-    <div class="check-icon"><fluent-spinner size="tiny"></fluent-spinner></div>
-    <div class="check-body">
-      <div class="check-label">${label}</div>
-      <div class="check-detail">${detail}</div>
+    <div class="dr-check-icon"><span class="dr-spinner"></span></div>
+    <div class="dr-check-body">
+      <div class="dr-check-label">${label}</div>
+      <div class="dr-check-detail">${detail}</div>
     </div>`
   list.appendChild(item)
   return item
 }
 
 function setCheck(item, status, icon, label, detail, badge) {
-  const badgeHtml = badge
-    ? `<fluent-badge appearance="filled" color="${badge.color}">${badge.text}</fluent-badge>`
-    : ''
-  item.className = `check-item status-${status}`
+  item.className = `dr-check status-${status}`
   item.innerHTML = `
-    <div class="check-icon">${icon}</div>
-    <div class="check-body">
-      <div class="check-label">${label} ${badgeHtml}</div>
-      <div class="check-detail">${detail}</div>
+    <div class="dr-check-icon">${icon}</div>
+    <div class="dr-check-body">
+      <div class="dr-check-label">${label} ${badge ? badgeHtml(badge) : ''}</div>
+      <div class="dr-check-detail">${detail}</div>
     </div>`
 }
 
-// ── Repair block helper ───────────────────────────────────────────────────────
-function addRepairBlock(area, { icon, label, detail, kind }) {
+function makeRepairBlock(area, { icon, label, cmd }) {
   const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
+  block.className = 'dr-repair fade-up'
   block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">${icon}</span>
+    <div class="dr-repair-info">
+      <span class="dr-repair-icon">${icon}</span>
       <div>
-        <div class="repair-label">${label}</div>
-        <div class="repair-detail">${detail}</div>
+        <div class="dr-repair-label">${label}</div>
+        <div class="dr-repair-cmd">${cmd}</div>
       </div>
     </div>
-    <fluent-button appearance="primary" class="repair-btn">${icon} ${label}</fluent-button>
-    <div class="repair-result hidden"></div>
+    <button class="btn-dr-primary repair-btn">${icon} ${label}</button>
+    <div class="dr-repair-result hidden"></div>
   `
   area.appendChild(block)
+  return block
+}
 
+function wireRepairBtn(block, invokeCmd, invokeArgs, { successLabel, retryLabel }) {
   const btn    = block.querySelector('.repair-btn')
-  const result = block.querySelector('.repair-result')
+  const result = block.querySelector('.dr-repair-result')
 
   btn.addEventListener('click', async () => {
     btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Réparation en cours…'
-    result.className = 'repair-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Exécution en cours, veuillez patienter…</div></div>`
+    btn.innerHTML = '<span class="dr-spinner"></span> En cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Exécution en cours, veuillez patienter…</div></div>`
 
     try {
-      const r = await invoke('run_repair', { kind })
+      const r = await invokeCmd(invokeArgs)
       if (r.ps_unavailable) {
-        result.className = 'repair-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.disabled = false
-        btn.innerHTML = `${icon} Réessayer`
+        btn.innerHTML = retryLabel
       } else {
-        result.className = `repair-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Réparation terminée' : '⚠️ Terminée avec avertissements'
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? successLabel : '⚠️ Terminé avec avertissements'
       }
     } catch (e) {
-      result.className = 'repair-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La réparation n'a pas pu être lancée : ${e}</div></div>`
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">Erreur : ${e}</div></div>`
       btn.disabled = false
-      btn.innerHTML = `${icon} Réessayer`
+      btn.innerHTML = retryLabel
     }
   })
 }
 
-// ── Defender activation block ─────────────────────────────────────────────────
+function addRepairBlock(area, { icon, label, cmd, kind }) {
+  const block = makeRepairBlock(area, { icon, label, cmd })
+  wireRepairBtn(block,
+    (args) => invoke('run_repair', args), { kind },
+    { successLabel: '✅ Réparation terminée', retryLabel: `${icon} Réessayer` }
+  )
+}
+
 function addDefenderBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🛡️</span>
-      <div>
-        <div class="repair-label">Activer Microsoft Defender</div>
-        <div class="repair-detail">Set-MpPreference -DisableRealtimeMonitoring $false</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="defender-btn">🛡️ Activer Microsoft Defender</fluent-button>
-    <div class="defender-result hidden"></div>
-  `
-  area.appendChild(block)
-
-  const btn    = block.querySelector('.defender-btn')
-  const result = block.querySelector('.defender-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
-    result.className = 'defender-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Activation de Microsoft Defender…</div></div>`
-
-    try {
-      const r = await invoke('activate_defender')
-      if (r.ps_unavailable) {
-        result.className = 'defender-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '🛡️ Réessayer'
-      } else {
-        result.className = `defender-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Defender activé' : '⚠️ Activation avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'defender-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '🛡️ Réessayer'
-    }
+  const block = makeRepairBlock(area, {
+    icon: '🛡️', label: 'Activer Microsoft Defender',
+    cmd: 'Set-MpPreference -DisableRealtimeMonitoring $false'
   })
+  wireRepairBtn(block,
+    () => invoke('activate_defender'), {},
+    { successLabel: '✅ Defender activé', retryLabel: '🛡️ Réessayer' }
+  )
 }
 
-// ── WinRE repair block ────────────────────────────────────────────────────────
 function addWinreRepairBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🔄</span>
-      <div>
-        <div class="repair-label">Réparer WinRE</div>
-        <div class="repair-detail">reagentc /disable → reagentc /enable</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="winre-btn">🔄 Réparer WinRE</fluent-button>
-    <div class="winre-result hidden"></div>
-  `
-  area.appendChild(block)
-
-  const btn    = block.querySelector('.winre-btn')
-  const result = block.querySelector('.winre-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Réparation en cours…'
-    result.className = 'winre-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Exécution de reagentc /disable puis /enable…</div></div>`
-
-    try {
-      const r = await invoke('repair_winre')
-      if (r.ps_unavailable) {
-        result.className = 'winre-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '🔄 Réessayer'
-      } else {
-        result.className = `winre-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ WinRE réparé' : '⚠️ Réparation avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'winre-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La réparation WinRE n'a pas pu être lancée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '🔄 Réessayer'
-    }
+  const block = makeRepairBlock(area, {
+    icon: '🔄', label: 'Réparer WinRE',
+    cmd: 'reagentc /disable → reagentc /enable'
   })
+  wireRepairBtn(block,
+    () => invoke('repair_winre'), {},
+    { successLabel: '✅ WinRE réparé', retryLabel: '🔄 Réessayer' }
+  )
 }
 
-// ── Windows Update action block ───────────────────────────────────────────────
 function addWindowsUpdateBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🔄</span>
-      <div>
-        <div class="repair-label">Lancer Windows Update</div>
-        <div class="repair-detail">usoclient ScanInstallWait</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="wu-btn">🔄 Lancer Windows Update</fluent-button>
-    <div class="wu-result hidden"></div>
-  `
-  area.appendChild(block)
-
-  const btn    = block.querySelector('.wu-btn')
-  const result = block.querySelector('.wu-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Lancement en cours…'
-    result.className = 'wu-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Démarrage de Windows Update en arrière-plan…</div></div>`
-
-    try {
-      const r = await invoke('launch_windows_update')
-      if (r.ps_unavailable) {
-        result.className = 'wu-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '🔄 Réessayer'
-      } else {
-        result.className = `wu-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Windows Update lancé' : '⚠️ Lancé avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'wu-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Windows Update n'a pas pu être lancé : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '🔄 Réessayer'
-    }
+  const block = makeRepairBlock(area, {
+    icon: '🔄', label: 'Lancer Windows Update',
+    cmd: 'usoclient ScanInstallWait'
   })
+  wireRepairBtn(block,
+    () => invoke('launch_windows_update'), {},
+    { successLabel: '✅ Windows Update lancé', retryLabel: '🔄 Réessayer' }
+  )
 }
 
-// ── Fast startup enable block ─────────────────────────────────────────────────
 function addFastStartupBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">⚡</span>
-      <div>
-        <div class="repair-label">Activer le démarrage rapide</div>
-        <div class="repair-detail">powercfg /hibernate on → HiberbootEnabled = 1</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="fs-btn">⚡ Activer le démarrage rapide</fluent-button>
-    <div class="fs-result hidden"></div>
-  `
-  area.appendChild(block)
-
-  const btn    = block.querySelector('.fs-btn')
-  const result = block.querySelector('.fs-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
-    result.className = 'fs-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Activation du démarrage rapide…</div></div>`
-
-    try {
-      const r = await invoke('enable_fast_startup')
-      if (r.ps_unavailable) {
-        result.className = 'fs-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '⚡ Réessayer'
-      } else {
-        result.className = `fs-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Démarrage rapide activé' : '⚠️ Activation avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'fs-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '⚡ Réessayer'
-    }
+  const block = makeRepairBlock(area, {
+    icon: '⚡', label: 'Activer le démarrage rapide',
+    cmd: 'powercfg /hibernate on → HiberbootEnabled = 1'
   })
+  wireRepairBtn(block,
+    () => invoke('enable_fast_startup'), {},
+    { successLabel: '✅ Démarrage rapide activé', retryLabel: '⚡ Réessayer' }
+  )
 }
 
-// ── Quick Machine Recovery enable block ───────────────────────────────────────
 function addQmrBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">☁️</span>
-      <div>
-        <div class="repair-label">Activer la récupération machine rapide</div>
-        <div class="repair-detail">reagentc /setrecoverysettings — CloudRemediation + AutoRemediation</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="qmr-btn">☁️ Activer la récupération machine rapide</fluent-button>
-    <div class="qmr-result hidden"></div>
-  `
-  area.appendChild(block)
-
-  const btn    = block.querySelector('.qmr-btn')
-  const result = block.querySelector('.qmr-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Activation en cours…'
-    result.className = 'qmr-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Configuration de la récupération machine rapide…</div></div>`
-
-    try {
-      const r = await invoke('enable_qmr')
-      if (r.ps_unavailable) {
-        result.className = 'qmr-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '☁️ Réessayer'
-      } else {
-        result.className = `qmr-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Récupération machine rapide activée' : '⚠️ Activation avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'qmr-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">L'activation n'a pas pu être lancée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '☁️ Réessayer'
-    }
+  const block = makeRepairBlock(area, {
+    icon: '☁️', label: 'Activer la récupération machine rapide',
+    cmd: 'reagentc /setrecoverysettings — CloudRemediation + AutoRemediation'
   })
+  wireRepairBtn(block,
+    () => invoke('enable_qmr'), {},
+    { successLabel: '✅ Récupération machine rapide activée', retryLabel: '☁️ Réessayer' }
+  )
 }

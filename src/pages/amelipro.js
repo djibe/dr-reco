@@ -3,17 +3,17 @@ import { notify } from '../notify.js'
 
 export function renderAmelipro(container, navigate) {
   container.innerHTML = `
-    <fluent-button appearance="subtle" id="back-btn">← Accueil</fluent-button>
+    <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
 
-    <div class="page-header" style="margin-top:12px">
+    <div class="dr-page-header">
       <h2>🏥 Outils Amelipro</h2>
       <p>Vérification des prérequis logiciels pour Amelipro</p>
     </div>
 
-    <fluent-button appearance="primary" id="launch-btn">▶ Lancer</fluent-button>
+    <button class="btn-dr-primary" id="launch-btn">▶ Lancer</button>
 
-    <div class="checks-list" id="checks-list"></div>
-    <div id="footer-area" style="margin-top:16px"></div>
+    <div class="dr-checks" id="checks-list"></div>
+    <div class="dr-repairs" id="footer-area" style="margin-top:1.25rem"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
@@ -24,18 +24,20 @@ export function renderAmelipro(container, navigate) {
 
   launchBtn.addEventListener('click', async () => {
     launchBtn.disabled = true
-    launchBtn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Vérification en cours…'
+    launchBtn.innerHTML = '<span class="dr-spinner"></span> Vérification en cours…'
     checksList.innerHTML = ''
     footer.innerHTML = ''
 
-    // ── Cryptolib CPS ────────────────────────────────────────────────────────
-    const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
-    let cryptolibOutdated = false
-    let usbSuspendActive = false
+    let cryptolibOutdated      = false
+    let usbSuspendActive       = false
     let extensionMissingBrowser = null
-    let detectedBrowser = null
-    let browserOutdated = false
-    let browserSlugForUpdate = null
+    let detectedBrowser        = null
+    let browserOutdated        = false
+    let browserSlugForUpdate   = null
+    let cnamOutdated           = false
+
+    // ── Cryptolib CPS ─────────────────────────────────────────────────────────
+    const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
     try {
       const r = await invoke('check_cryptolib_version')
       cryptolibOutdated = !r.is_ok && !r.not_found
@@ -53,7 +55,6 @@ export function renderAmelipro(container, navigate) {
 
     // ── Services CNAM ─────────────────────────────────────────────────────────
     const cnamItem = addCheck(checksList, 'Services CNAM (SrvSvCnam)', 'Lecture du registre Windows…')
-    let cnamOutdated = false
     try {
       const r = await invoke('check_services_cnam')
       cnamOutdated = !r.is_ok
@@ -71,7 +72,7 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
-        // ── Lecteur de carte à puce ───────────────────────────────────────────────
+    // ── Lecteur de carte à puce ───────────────────────────────────────────────
     const scItem = addCheck(checksList, 'Lecteur de carte à puce', 'Recherche de périphériques connectés…')
     try {
       const r = await invoke('check_smartcard_reader')
@@ -89,33 +90,26 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
-        // ── Navigateur & extension Lecture Carte Vitale ──────────────────────────
+    // ── Navigateur & extension Carte Vitale ───────────────────────────────────
     const brItem = addCheck(checksList, 'Navigateur & extension Carte Vitale', 'Détection du navigateur par défaut…')
     try {
       const r = await invoke('check_browser_and_extension')
-
       if (r.ps_unavailable) {
         setCheck(brItem, 'warning', '⚠️', 'Navigateur & extension Carte Vitale',
           r.detail, { text: 'PowerShell indisponible', color: 'warning' })
-
       } else if (!r.extension_checked) {
-        // Browser detected but not Chrome or Firefox
         detectedBrowser = r.browser
-        const icon = r.browser === 'unknown' ? '❌' : '⚠️'
+        const icon   = r.browser === 'unknown' ? '❌' : '⚠️'
         const status = r.browser === 'unknown' ? 'error' : 'warning'
-        const badge = r.browser === 'unknown'
+        const badge  = r.browser === 'unknown'
           ? { text: 'Navigateur inconnu', color: 'danger' }
           : { text: r.browser_label, color: 'warning' }
-        setCheck(brItem, status, icon, 'Navigateur & extension Carte Vitale',
-          r.detail, badge)
-
+        setCheck(brItem, status, icon, 'Navigateur & extension Carte Vitale', r.detail, badge)
       } else if (r.extension_found) {
         detectedBrowser = r.browser
         setCheck(brItem, 'success', '✅', 'Navigateur & extension Carte Vitale',
           r.detail, { text: r.browser_label, color: 'success' })
-
       } else {
-        // Extension missing — store browser for download block
         detectedBrowser = r.browser
         extensionMissingBrowser = r.browser
         setCheck(brItem, 'error', '❌', 'Navigateur & extension Carte Vitale',
@@ -129,7 +123,8 @@ export function renderAmelipro(container, navigate) {
 
     // ── Version du navigateur par défaut ──────────────────────────────────────
     if (detectedBrowser === 'chrome' || detectedBrowser === 'firefox' || detectedBrowser === 'edge') {
-      const browserDisplayName = detectedBrowser === 'chrome' ? 'Google Chrome' : detectedBrowser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
+      const browserDisplayName = detectedBrowser === 'chrome' ? 'Google Chrome'
+        : detectedBrowser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
       const vbrItem = addCheck(checksList, `Version de ${browserDisplayName}`, 'Lecture de la version installée…')
       try {
         const r = await invoke('check_browser_version', { browser: detectedBrowser })
@@ -137,25 +132,23 @@ export function renderAmelipro(container, navigate) {
           browserOutdated = true
           browserSlugForUpdate = detectedBrowser
         }
-        const status = r.is_ok ? 'success' : (r.installed === '' ? 'warning' : 'warning')
-        const icon   = r.is_ok ? '✅' : '⚠️'
-        const badge  = r.is_ok
+        const icon  = r.is_ok ? '✅' : '⚠️'
+        const badge = r.is_ok
           ? { text: `v${r.installed}`, color: 'success' }
           : r.installed === ''
             ? { text: 'Non détecté', color: 'warning' }
             : { text: 'Mise à jour requise', color: 'warning' }
-        setCheck(vbrItem, status, icon,
+        setCheck(vbrItem, r.is_ok ? 'success' : 'warning', icon,
           `Version de ${r.browser_label}`, r.detail, badge)
       } catch (e) {
-        setCheck(vbrItem, 'warning', '⚠️',
-          'Version du navigateur',
+        setCheck(vbrItem, 'warning', '⚠️', 'Version du navigateur',
           `La vérification de version n'a pas pu être lancée : ${e}`,
           { text: 'Indisponible', color: 'warning' })
       }
     }
 
-    // ── Mise en veille sélective USB ─────────────────────────────────────────
-    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d’alimentation…')
+    // ── Mise en veille sélective USB ──────────────────────────────────────────
+    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d\'alimentation…')
     try {
       const r = await invoke('check_usb_suspend')
       if (r.not_found) {
@@ -175,7 +168,7 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
-        // ── Done ─────────────────────────────────────────────────────────────────
+    // ── Done ──────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer'
 
@@ -186,125 +179,103 @@ export function renderAmelipro(container, navigate) {
       notify('Dr Reco — AmeliPro', `⚠️ Vérification terminée — ${issueCount} problème${issueCount > 1 ? 's' : ''} détecté${issueCount > 1 ? 's' : ''}.`)
     }
 
-    if (cryptolibOutdated) addCryptolibDownloadBlock(footer)
-    if (cnamOutdated)      addCnamDownloadBlock(footer)
-    if (extensionMissingBrowser) addExtensionDownloadBlock(footer, extensionMissingBrowser)
+    if (cryptolibOutdated)                     addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour Cryptolib CPS',          cmd: 'CryptolibCPS-5.2.6_x64.msi — esante.gouv.fr',                url: CRYPTOLIB_URL,  btnLabel: '⬇️ Télécharger Cryptolib CPS 5.2.6', successMsg: 'Le téléchargement a été ouvert dans votre navigateur. Installez le fichier .msi une fois téléchargé.' })
+    if (cnamOutdated)                          addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour les Services CNAM',       cmd: 'espacepro.ameli.fr — Section Aide',                           url: CNAM_URL,       btnLabel: '⬇️ Télécharger les Services CNAM',  successMsg: 'La page de téléchargement AmeliPro a été ouverte dans votre navigateur.' })
+    if (extensionMissingBrowser)               addExtensionDownloadBlock(footer, extensionMissingBrowser)
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
-    if (usbSuspendActive) addUsbSuspendBlock(footer)
+    if (usbSuspendActive)                      addUsbSuspendBlock(footer)
 
-    const homeBtn = document.createElement('fluent-button')
-    homeBtn.setAttribute('appearance', 'secondary')
+    const homeBtn = document.createElement('button')
+    homeBtn.className = 'btn-dr-secondary mt-3'
     homeBtn.innerHTML = '🏠 Retour à l\'accueil'
     homeBtn.onclick = () => navigate('welcome')
     footer.appendChild(homeBtn)
   })
 }
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function badgeHtml({ text, color }) {
+  const cls = color === 'success' ? 'dr-badge-success'
+            : color === 'warning' ? 'dr-badge-warning'
+            : color === 'danger'  ? 'dr-badge-danger'
+            : color === 'info'    ? 'dr-badge-info'
+            : 'dr-badge-subtle'
+  return `<span class="dr-badge ${cls}">${text}</span>`
+}
+
 function addCheck(list, label, detail) {
   const item = document.createElement('div')
-  item.className = 'check-item status-running fade-up'
+  item.className = 'dr-check status-running fade-up'
   item.innerHTML = `
-    <div class="check-icon"><fluent-spinner size="tiny"></fluent-spinner></div>
-    <div class="check-body">
-      <div class="check-label">${label}</div>
-      <div class="check-detail">${detail}</div>
+    <div class="dr-check-icon"><span class="dr-spinner"></span></div>
+    <div class="dr-check-body">
+      <div class="dr-check-label">${label}</div>
+      <div class="dr-check-detail">${detail}</div>
     </div>`
   list.appendChild(item)
   return item
 }
 
 function setCheck(item, status, icon, label, detail, badge) {
-  const badgeHtml = badge
-    ? `<fluent-badge appearance="filled" color="${badge.color}">${badge.text}</fluent-badge>`
-    : ''
-  item.className = `check-item status-${status}`
+  item.className = `dr-check status-${status}`
   item.innerHTML = `
-    <div class="check-icon">${icon}</div>
-    <div class="check-body">
-      <div class="check-label">${label} ${badgeHtml}</div>
-      <div class="check-detail">${detail}</div>
+    <div class="dr-check-icon">${icon}</div>
+    <div class="dr-check-body">
+      <div class="dr-check-label">${label} ${badge ? badgeHtml(badge) : ''}</div>
+      <div class="dr-check-detail">${detail}</div>
     </div>`
 }
 
-// ── Cryptolib download block ──────────────────────────────────────────────────
-const CRYPTOLIB_URL = 'https://esante.gouv.fr/sites/default/files/media/document/CryptolibCPS-5.2.6_x64.msi'
-
-function addCryptolibDownloadBlock(area) {
+function makeRepairBlock(area, { icon, label, cmd }, prepend = false) {
   const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
+  block.className = 'dr-repair fade-up'
   block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">📦</span>
+    <div class="dr-repair-info">
+      <span class="dr-repair-icon">${icon}</span>
       <div>
-        <div class="repair-label">Mettre à jour Cryptolib CPS</div>
-        <div class="repair-detail">CryptolibCPS-5.2.6_x64.msi — esante.gouv.fr</div>
+        <div class="dr-repair-label">${label}</div>
+        <div class="dr-repair-cmd">${cmd}</div>
       </div>
     </div>
-    <fluent-button appearance="primary" class="dl-btn">⬇️ Télécharger Cryptolib CPS 5.2.6</fluent-button>
-    <div class="dl-result hidden"></div>
+    <button class="btn-dr-primary repair-btn">${icon} ${label}</button>
+    <div class="dr-repair-result hidden"></div>
   `
-  area.insertBefore(block, area.firstChild)
-
-  const btn    = block.querySelector('.dl-btn')
-  const result = block.querySelector('.dl-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture du téléchargement…'
-    try {
-      await invoke('open_url', { url: CRYPTOLIB_URL })
-      result.className = 'dl-result check-item status-success fade-up'
-      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">Le téléchargement a été ouvert dans votre navigateur. Installez le fichier .msi une fois téléchargé.</div></div>`
-      btn.innerHTML = '✅ Téléchargement ouvert'
-    } catch (e) {
-      result.className = 'dl-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '⬇️ Réessayer'
-    }
-  })
+  if (prepend) area.insertBefore(block, area.firstChild)
+  else area.appendChild(block)
+  return block
 }
 
-// ── Services CNAM download block ──────────────────────────────────────────────
-const CNAM_URL = 'https://espacepro.ameli.fr/inscription/#/aide#blocs-2'
+// ── URL-open blocks (download/link) ───────────────────────────────────────────
 
-function addCnamDownloadBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">📦</span>
-      <div>
-        <div class="repair-label">Mettre à jour les Services CNAM</div>
-        <div class="repair-detail">espacepro.ameli.fr — Section Aide</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="cnam-btn">⬇️ Télécharger les Services CNAM</fluent-button>
-    <div class="cnam-result hidden"></div>
-  `
-  area.insertBefore(block, area.firstChild)
+const CRYPTOLIB_URL = 'https://esante.gouv.fr/sites/default/files/media/document/CryptolibCPS-5.2.6_x64.msi'
+const CNAM_URL      = 'https://espacepro.ameli.fr/inscription/#/aide#blocs-2'
 
-  const btn    = block.querySelector('.cnam-btn')
-  const result = block.querySelector('.cnam-result')
+function addDownloadBlock(area, { icon, label, cmd, url, btnLabel, successMsg }) {
+  const block = makeRepairBlock(area, { icon, label, cmd }, true)
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
+  btn.innerHTML = btnLabel
 
   btn.addEventListener('click', async () => {
     btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
+    btn.innerHTML = '<span class="dr-spinner"></span> Ouverture…'
     try {
-      await invoke('open_url', { url: CNAM_URL })
-      result.className = 'cnam-result check-item status-success fade-up'
-      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">La page de téléchargement AmeliPro a été ouverte dans votre navigateur.</div></div>`
-      btn.innerHTML = '✅ Page ouverte'
+      await invoke('open_url', { url })
+      result.className = 'dr-repair-result dr-check status-success fade-up'
+      result.innerHTML = `<div class="dr-check-icon">✅</div><div class="dr-check-body"><div class="dr-check-detail">${successMsg}</div></div>`
+      btn.innerHTML = '✅ Ouvert'
     } catch (e) {
-      result.className = 'cnam-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
       btn.disabled = false
-      btn.innerHTML = '⬇️ Réessayer'
+      btn.innerHTML = btnLabel
     }
   })
 }
 
 // ── Extension download block ──────────────────────────────────────────────────
+
 const EXTENSION_URLS = {
   chrome:  'https://chromewebstore.google.com/detail/lecture-carte-vitale/kpjpglcbcgnblkigbedgaoegjbifejka?hl=fr',
   firefox: 'https://addons.mozilla.org/fr/firefox/addon/lecture-carte-vitale/',
@@ -315,82 +286,44 @@ function addExtensionDownloadBlock(area, browser) {
   const url         = EXTENSION_URLS[browser]
   const browserName = browser === 'chrome' ? 'Google Chrome' : browser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
   const store       = browser === 'firefox' ? 'Firefox Add-ons' : 'Chrome Web Store'
-
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🧩</span>
-      <div>
-        <div class="repair-label">Installer l'extension Lecture Carte Vitale</div>
-        <div class="repair-detail">${store} — ${browserName}</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="ext-btn">🧩 Installer l'extension</fluent-button>
-    <div class="ext-result hidden"></div>
-  `
-  area.insertBefore(block, area.firstChild)
-
-  const btn    = block.querySelector('.ext-btn')
-  const result = block.querySelector('.ext-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
-    try {
-      await invoke('open_url', { url })
-      result.className = 'ext-result check-item status-success fade-up'
-      result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">La page ${store} a été ouverte dans votre navigateur. Cliquez sur "Ajouter" pour installer l'extension.</div></div>`
-      btn.innerHTML = '✅ Page ouverte'
-    } catch (e) {
-      result.className = 'ext-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible d'ouvrir le lien : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '🧩 Réessayer'
-    }
+  addDownloadBlock(area, {
+    icon: '🧩', label: 'Installer l\'extension Lecture Carte Vitale',
+    cmd: `${store} — ${browserName}`, url,
+    btnLabel: '🧩 Installer l\'extension',
+    successMsg: `La page ${store} a été ouverte dans votre navigateur. Cliquez sur "Ajouter" pour installer l'extension.`
   })
 }
 
 // ── Browser update block ──────────────────────────────────────────────────────
+
 function addBrowserUpdateBlock(area, browser) {
   const browserName = browser === 'chrome' ? 'Google Chrome' : browser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
+  const block = makeRepairBlock(area, {
+    icon: '🔄', label: `Mettre à jour ${browserName}`,
+    cmd: 'Ouvre la page de mise à jour intégrée du navigateur'
+  }, true)
 
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🔄</span>
-      <div>
-        <div class="repair-label">Mettre à jour ${browserName}</div>
-        <div class="repair-detail">Ouvre la page de mise à jour intégrée du navigateur</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="browser-update-btn">🔄 Mettre à jour ${browserName}</fluent-button>
-    <div class="browser-update-result hidden"></div>
-  `
-  area.insertBefore(block, area.firstChild)
-
-  const btn    = block.querySelector('.browser-update-btn')
-  const result = block.querySelector('.browser-update-result')
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
 
   btn.addEventListener('click', async () => {
     btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Ouverture…'
+    btn.innerHTML = '<span class="dr-spinner"></span> Ouverture…'
     try {
       const r = await invoke('launch_browser_update', { browser })
       if (r.ps_unavailable) {
-        result.className = 'browser-update-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.disabled = false
         btn.innerHTML = '🔄 Réessayer'
       } else {
-        result.className = 'browser-update-result check-item status-success fade-up'
-        result.innerHTML = `<div class="check-icon">✅</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        result.className = 'dr-repair-result dr-check status-success fade-up'
+        result.innerHTML = `<div class="dr-check-icon">✅</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.innerHTML = `✅ ${browserName} ouvert`
       }
     } catch (e) {
-      result.className = 'browser-update-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">Impossible de lancer la mise à jour : ${e}</div></div>`
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">Impossible de lancer la mise à jour : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🔄 Réessayer'
     }
@@ -398,48 +331,36 @@ function addBrowserUpdateBlock(area, browser) {
 }
 
 // ── USB Selective Suspend disable block ───────────────────────────────────────
-function addUsbSuspendBlock(area) {
-  const block = document.createElement('div')
-  block.className = 'repair-block fade-up'
-  block.innerHTML = `
-    <div class="repair-info">
-      <span class="repair-icon">🔌</span>
-      <div>
-        <div class="repair-label">Désactiver la mise en veille sélective USB</div>
-        <div class="repair-detail">powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE</div>
-      </div>
-    </div>
-    <fluent-button appearance="primary" class="usb-btn">🔌 Désactiver la mise en veille USB</fluent-button>
-    <div class="usb-result hidden"></div>
-  `
-  area.insertBefore(block, area.firstChild)
 
-  const btn    = block.querySelector('.usb-btn')
-  const result = block.querySelector('.usb-result')
+function addUsbSuspendBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '🔌', label: 'Désactiver la mise en veille sélective USB',
+    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE'
+  }, true)
+
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
 
   btn.addEventListener('click', async () => {
     btn.disabled = true
-    btn.innerHTML = '<fluent-spinner size="tiny" style="margin-right:8px"></fluent-spinner> Application en cours…'
-    result.className = 'usb-result check-item status-running fade-up'
-    result.innerHTML = `<div class="check-icon">⏳</div><div class="check-body"><div class="check-detail">Modification du plan d'alimentation…</div></div>`
-
+    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
     try {
       const r = await invoke('disable_usb_suspend')
       if (r.ps_unavailable) {
-        result.className = 'usb-result check-item status-warning fade-up'
-        result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.disabled = false
         btn.innerHTML = '🔌 Réessayer'
       } else {
-        result.className = `usb-result check-item status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `
-          <div class="check-icon">${r.is_ok ? '✅' : '⚠️'}</div>
-          <div class="check-body"><div class="check-detail">${r.detail}</div></div>`
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.innerHTML = r.is_ok ? '✅ Mise en veille USB désactivée' : '⚠️ Modification avec avertissements'
       }
     } catch (e) {
-      result.className = 'usb-result check-item status-warning fade-up'
-      result.innerHTML = `<div class="check-icon">⚠️</div><div class="check-body"><div class="check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🔌 Réessayer'
     }
