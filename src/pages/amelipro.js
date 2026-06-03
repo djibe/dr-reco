@@ -3,17 +3,20 @@ import { notify } from '../notify.js'
 
 export function renderAmelipro(container, navigate) {
   container.innerHTML = `
-    <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
+    <div class="dr-nav-card">
+      <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
 
-    <div class="dr-page-header">
-      <h2>🏥 Outils Amelipro</h2>
+      <div class="dr-page-header">
+        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="var(--dr-primary)"><path d="M420-360h120l-23-129q20-10 31.5-29t11.5-42q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560q0 23 11.5 42t31.5 29l-23 129Zm60 280q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Z"/></svg>
+        <h2>Outils Amelipro</h2>
+      </div>
       <p>Vérification des prérequis logiciels pour Amelipro</p>
+
+      <button class="btn-dr-primary" id="launch-btn" style="width: fit-content">▶ Lancer l’analyse</button>
+
+      <div class="dr-checks" id="checks-list"></div>
+      <div class="dr-repairs" id="footer-area" style="margin-top:1.25rem"></div>
     </div>
-
-    <button class="btn-dr-primary" id="launch-btn">▶ Lancer</button>
-
-    <div class="dr-checks" id="checks-list"></div>
-    <div class="dr-repairs" id="footer-area" style="margin-top:1.25rem"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
@@ -170,7 +173,7 @@ export function renderAmelipro(container, navigate) {
 
     // ── Done ──────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
-    launchBtn.innerHTML = '🔄 Relancer'
+    launchBtn.innerHTML = '🔄 Relancer l’analyse'
 
     const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive].filter(Boolean).length
     if (issueCount === 0) {

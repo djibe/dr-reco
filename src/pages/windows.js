@@ -3,26 +3,29 @@ import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 import { notify } from '../notify.js'
 
 const MIN_BUILD  = 26200
-const MIN_RAM_MB = 16 * 1024
+const MIN_RAM_MB = 15 * 1024
 
 export function renderWindows(container, navigate) {
   container.innerHTML = `
-    <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
+    <div class="dr-nav-card">
+      <button class="btn-dr-subtle mb-3" id="back-btn">← Accueil</button>
 
-    <div class="dr-page-header">
-      <h2><svg xmlns="http://www.w3.org/2000/svg" width="24" heigh="24" fill-rule="evenodd" clip-rule="evenodd" image-rendering="optimizeQuality" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" viewBox="0 0 512 512.02">
-            <path fill="#0078d4" fill-rule="nonzero" d="M0 512.02h242.686V269.335H0zm0-269.334h242.686V0H0zm269.314 0H512V0H269.314zm0 269.334H512V269.335H269.314z"/>
-          </svg> Windows &amp; Maintenance</h2>
-      <p>Vérification de la version du système, intégrité des fichiers et santé du disque</p>
+      <div class="dr-page-header">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" heigh="24" fill-rule="evenodd" clip-rule="evenodd" image-rendering="optimizeQuality" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" viewBox="0 0 512 512.02">
+          <path fill="var(--dr-primary)" fill-rule="nonzero" d="M0 512.02h242.686V269.335H0zm0-269.334h242.686V0H0zm269.314 0H512V0H269.314zm0 269.334H512V269.335H269.314z"/>
+        </svg>
+        <h2>Windows &amp; Maintenance</h2>
+      </div>
+      <p>Vérification de la version du système, de l’intégrité des fichiers et de la santé du disque</p>
+
+      <div class="dr-btn-row">
+        <button class="btn-dr-primary" id="launch-btn">▶ Lancer l’analyse</button>
+        <button class="btn-dr-secondary" id="cancel-btn" style="display:none">✕ Annuler</button>
+      </div>
+
+      <div class="dr-checks" id="checks-list"></div>
+      <div class="dr-repairs" id="repair-actions"></div>
     </div>
-
-    <div class="dr-btn-row">
-      <button class="btn-dr-primary" id="launch-btn">▶ Lancer la vérification</button>
-      <button class="btn-dr-secondary" id="cancel-btn" style="display:none">✕ Annuler</button>
-    </div>
-
-    <div class="dr-checks" id="checks-list"></div>
-    <div class="dr-repairs" id="repair-actions"></div>
   `
 
   container.querySelector('#back-btn').onclick = () => navigate('welcome')
@@ -332,7 +335,7 @@ export function renderWindows(container, navigate) {
     // ── Done ──────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
-    launchBtn.innerHTML = '🔄 Relancer la vérification'
+    launchBtn.innerHTML = '🔄 Relancer l’analyse'
 
     if (!cancelled) {
       const issueCount = [versionError, sfcError, chkdskError, avError, winreError, fastStartupDisabled, qmrDisabled].filter(Boolean).length
