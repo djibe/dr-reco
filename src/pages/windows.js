@@ -17,8 +17,9 @@ export function renderWindows(container, navigate) {
         <h2>Windows &amp; Maintenance</h2>
       </div>
       <p>Vérification de la version du système, de l’intégrité des fichiers et de la santé du disque</p>
+      <p class="text-muted">L’analyse peut durer plus de 20 minutes</p>
 
-      <div class="dr-btn-row">
+      <div class="dr-btn-row mt-5">
         <button class="btn-dr-primary" id="launch-btn">▶ Lancer l’analyse</button>
         <button class="btn-dr-secondary" id="cancel-btn" style="display:none">✕ Annuler</button>
       </div>
@@ -65,13 +66,13 @@ export function renderWindows(container, navigate) {
     function wasCancelled(item, label) {
       if (!cancelled) return false
       setCheck(item, 'cancelled', '⊘', label,
-        'Vérification annulée par l\'utilisateur.',
+        'Vérification annulée par l’utilisateur.',
         { text: 'Annulé', color: 'subtle' })
       return true
     }
 
     // ── 0. Point de restauration ──────────────────────────────────────────────
-    const rpItem = addCheck(checksList, 'Point de restauration Windows', 'Création d\'un point de restauration…')
+    const rpItem = addCheck(checksList, 'Point de restauration Windows', 'Création d’un point de restauration…')
     if (!wasCancelled(rpItem, 'Point de restauration Windows')) {
       try {
         const r = await invoke('create_restore_point')
@@ -152,7 +153,7 @@ export function renderWindows(container, navigate) {
     }
 
     // ── 4. WinRE ──────────────────────────────────────────────────────────────
-    const winreItem = addCheck(checksList, 'Windows Recovery (WinRE)', 'Vérification de l\'état de la partition de récupération…')
+    const winreItem = addCheck(checksList, 'Windows Recovery (WinRE)', 'Vérification de l’état de la partition de récupération…')
     if (!wasCancelled(winreItem, 'Windows Recovery (WinRE)')) {
       try {
         const r = await invoke('check_winre')
@@ -241,7 +242,7 @@ export function renderWindows(container, navigate) {
         const av = await invoke('check_antivirus')
         if (av.ps_unavailable) {
           setCheck(avItem, 'warning', '⚠️', 'Antivirus',
-            'Impossible d\'interroger le centre de sécurité Windows — PowerShell est indisponible sur ce système.',
+            'Impossible d’interroger le centre de sécurité Windows — PowerShell est indisponible sur ce système.',
             { text: 'PowerShell indisponible', color: 'warning' })
         } else if (av.active.length > 0) {
           setCheck(avItem, 'success', '✅', 'Antivirus',
@@ -396,7 +397,7 @@ export function renderWindows(container, navigate) {
 
     const homeBtn = document.createElement('button')
     homeBtn.className = 'btn-dr-secondary mt-3'
-    homeBtn.innerHTML = '🏠 Retour à l\'accueil'
+    homeBtn.innerHTML = '🏠 Retour à l’accueil'
     homeBtn.onclick = () => navigate('welcome')
     repairArea.appendChild(homeBtn)
   })

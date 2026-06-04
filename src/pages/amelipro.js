@@ -12,7 +12,7 @@ export function renderAmelipro(container, navigate) {
       </div>
       <p>Vérification des prérequis logiciels pour Amelipro</p>
 
-      <button class="btn-dr-primary" id="launch-btn" style="width: fit-content">▶ Lancer l’analyse</button>
+      <button class="btn-dr-primary mt-5" id="launch-btn" style="width: fit-content">▶ Lancer l’analyse</button>
 
       <div class="dr-checks" id="checks-list"></div>
       <div class="dr-repairs" id="footer-area" style="margin-top:1.25rem"></div>
@@ -151,7 +151,7 @@ export function renderAmelipro(container, navigate) {
     }
 
     // ── Mise en veille sélective USB ──────────────────────────────────────────
-    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d\'alimentation…')
+    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d’alimentation…')
     try {
       const r = await invoke('check_usb_suspend')
       if (r.not_found) {
@@ -190,7 +190,7 @@ export function renderAmelipro(container, navigate) {
 
     const homeBtn = document.createElement('button')
     homeBtn.className = 'btn-dr-secondary mt-3'
-    homeBtn.innerHTML = '🏠 Retour à l\'accueil'
+    homeBtn.innerHTML = '🏠 Retour à l’accueil'
     homeBtn.onclick = () => navigate('welcome')
     footer.appendChild(homeBtn)
   })
@@ -290,9 +290,9 @@ function addExtensionDownloadBlock(area, browser) {
   const browserName = browser === 'chrome' ? 'Google Chrome' : browser === 'firefox' ? 'Mozilla Firefox' : 'Microsoft Edge'
   const store       = browser === 'firefox' ? 'Firefox Add-ons' : 'Chrome Web Store'
   addDownloadBlock(area, {
-    icon: '🧩', label: 'Installer l\'extension Lecture Carte Vitale',
+    icon: '🧩', label: 'Installer l’extension Lecture Carte Vitale',
     cmd: `${store} — ${browserName}`, url,
-    btnLabel: '🧩 Installer l\'extension',
+    btnLabel: '🧩 Installer l’extension',
     successMsg: `La page ${store} a été ouverte dans votre navigateur. Cliquez sur "Ajouter" pour installer l'extension.`
   })
 }
