@@ -987,6 +987,62 @@ powercfg /SETACTIVE SCHEME_CURRENT
     }
 }
 
+// ─── DISM Component Cleanup ───────────────────────────────────────────────────
+#[tauri::command]
+async fn run_dism_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    match app.shell()
+        .command("Dism.exe")
+        .args(["/online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"])
+        .output()
+        .await
+    {
+        Err(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de lancer DISM — {}", e)
+        )),
+        Ok(output) => {
+            let code = output.status.code().unwrap_or(-1);
+            if code == 0 {
+                Ok(CheckResult::ok(
+                    "Nettoyage des composants Windows effectué avec succès (DISM /StartComponentCleanup /ResetBase)."
+                ))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "DISM a retourné le code {}. Des droits administrateur sont peut-être nécessaires.",
+                    code
+                )))
+            }
+        }
+    }
+}
+
+// ─── CompactOS ────────────────────────────────────────────────────────────────
+#[tauri::command]
+async fn run_compact_os(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    match app.shell()
+        .command("Compact.exe")
+        .args(["/CompactOS:always"])
+        .output()
+        .await
+    {
+        Err(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de lancer Compact.exe — {}", e)
+        )),
+        Ok(output) => {
+            let code = output.status.code().unwrap_or(-1);
+            if code == 0 {
+                Ok(CheckResult::ok(
+                    "Compression du système d'exploitation activée avec succès (CompactOS)."
+                ))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "Compact.exe a retourné le code {}. Des droits administrateur sont peut-être nécessaires.",
+                    code
+                )))
+            }
+        }
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -1019,6 +1075,8 @@ fn main() {
             enable_qmr,
             check_usb_suspend,
             disable_usb_suspend,
+            run_dism_cleanup,
+            run_compact_os,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

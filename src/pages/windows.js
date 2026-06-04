@@ -332,6 +332,46 @@ export function renderWindows(container, navigate) {
       }
     }
 
+    // ── 12. Nettoyage des composants DISM ────────────────────────────────────
+    const dismItem = addCheck(checksList, 'Nettoyage des composants Windows (DISM)', 'Dism.exe /StartComponentCleanup /ResetBase — peut prendre plusieurs minutes…')
+    if (!wasCancelled(dismItem, 'Nettoyage des composants Windows (DISM)')) {
+      try {
+        const r = await invoke('run_dism_cleanup')
+        if (r.ps_unavailable) {
+          setCheck(dismItem, 'warning', '⚠️', 'Nettoyage des composants Windows (DISM)',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          setCheck(dismItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Nettoyage des composants Windows (DISM)', r.detail,
+            r.is_ok ? { text: 'Effectué', color: 'success' } : { text: 'Erreur', color: 'warning' })
+        }
+      } catch (e) {
+        setCheck(dismItem, 'warning', '⚠️', 'Nettoyage des composants Windows (DISM)',
+          `Le nettoyage DISM n'a pas pu être lancé : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
+    // ── 13. Compression du système (CompactOS) ────────────────────────────────
+    const compactItem = addCheck(checksList, 'Compression du système (CompactOS)', 'Compact.exe /CompactOS:always — peut prendre plusieurs minutes…')
+    if (!wasCancelled(compactItem, 'Compression du système (CompactOS)')) {
+      try {
+        const r = await invoke('run_compact_os')
+        if (r.ps_unavailable) {
+          setCheck(compactItem, 'warning', '⚠️', 'Compression du système (CompactOS)',
+            r.detail, { text: 'Indisponible', color: 'warning' })
+        } else {
+          setCheck(compactItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Compression du système (CompactOS)', r.detail,
+            r.is_ok ? { text: 'Activée', color: 'success' } : { text: 'Erreur', color: 'warning' })
+        }
+      } catch (e) {
+        setCheck(compactItem, 'warning', '⚠️', 'Compression du système (CompactOS)',
+          `CompactOS n'a pas pu être lancé : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
     // ── Done ──────────────────────────────────────────────────────────────────
     cancelBtn.style.display = 'none'
     launchBtn.disabled = false
