@@ -182,8 +182,8 @@ export function renderAmelipro(container, navigate) {
       notify('Dr Reco — AmeliPro', `⚠️ Vérification terminée — ${issueCount} problème${issueCount > 1 ? 's' : ''} détecté${issueCount > 1 ? 's' : ''}.`)
     }
 
-    if (cryptolibOutdated)                     addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour Cryptolib CPS',          cmd: 'CryptolibCPS-5.2.6_x64.msi — esante.gouv.fr',                url: CRYPTOLIB_URL,  btnLabel: '⬇️ Télécharger Cryptolib CPS 5.2.6', successMsg: 'Le téléchargement a été ouvert dans votre navigateur. Installez le fichier .msi une fois téléchargé.' })
-    if (cnamOutdated)                          addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour les Services CNAM',       cmd: 'espacepro.ameli.fr — Section Aide',                           url: CNAM_URL,       btnLabel: '⬇️ Télécharger les Services CNAM',  successMsg: 'La page de téléchargement AmeliPro a été ouverte dans votre navigateur.' })
+    if (cryptolibOutdated)                     addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour Cryptolib CPS',          cmd: 'CryptolibCPS-5.2.6_x64.msi — esante.gouv.fr',                url: CRYPTOLIB_URL,  btnLabel: '⬇️ Télécharger Cryptolib CPS 5.2.6', successMsg: 'Le téléchargement a été ouvert dans le navigateur. Installer le fichier .msi une fois téléchargé.' })
+    if (cnamOutdated)                          addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour les Services CNAM',       cmd: 'espacepro.ameli.fr — Section Aide',                           url: CNAM_URL,       btnLabel: '⬇️ Télécharger les Services CNAM',  successMsg: 'La page de téléchargement AmeliPro a été ouverte dans le navigateur.' })
     if (extensionMissingBrowser)               addExtensionDownloadBlock(footer, extensionMissingBrowser)
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
     if (usbSuspendActive)                      addUsbSuspendBlock(footer)
@@ -293,7 +293,7 @@ function addExtensionDownloadBlock(area, browser) {
     icon: '🧩', label: 'Installer l’extension Lecture Carte Vitale',
     cmd: `${store} — ${browserName}`, url,
     btnLabel: '🧩 Installer l’extension',
-    successMsg: `La page ${store} a été ouverte dans votre navigateur. Cliquez sur "Ajouter" pour installer l'extension.`
+    successMsg: `La page ${store} a été ouverte dans le navigateur. Cliquer sur "Ajouter" pour installer l'extension.`
   })
 }
 

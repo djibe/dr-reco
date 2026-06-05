@@ -59,7 +59,7 @@ async fn powershell(app: &tauri::AppHandle, script: &str) -> PsResult {
 
     match result {
         Err(e) => PsResult::SpawnFailed(format!(
-            "PowerShell est introuvable ou inaccessible : {}. Vérifiez que PowerShell est installé sur ce système.",
+            "PowerShell est introuvable ou inaccessible : {}. Vérifier que PowerShell est installé sur l’ordinateur.",
             e
         )),
         Ok(output) => {
@@ -123,7 +123,7 @@ async fn run_sfc_check(app: tauri::AppHandle) -> Result<CheckResult, String> {
         Ok(CheckResult::ok("Aucune violation d'intégrité trouvée. Le système de fichiers est sain."))
     } else if found_violations {
         let _ = powershell(&app, "Start-Process -FilePath 'dism.exe' -ArgumentList '/Online','/Cleanup-Image','/RestoreHealth' -WindowStyle Hidden").await;
-        Ok(CheckResult::err("Des violations d'intégrité ont été détectées. Une réparation DISM /RestoreHealth a été lancée. Redémarrez l'ordinateur pour appliquer les corrections."))
+        Ok(CheckResult::err("Des violations d'intégrité ont été détectées. Une réparation DISM /RestoreHealth a été lancée. Redémarrer l'ordinateur pour appliquer les corrections."))
     } else if combined.trim().is_empty() {
         Ok(CheckResult::unavailable("SFC n'a produit aucun résultat. Des droits administrateur sont peut-être nécessaires."))
     } else {
@@ -185,7 +185,7 @@ async fn run_chkdsk(app: tauri::AppHandle) -> Result<CheckResult, String> {
         let _ = powershell_native(&app, "echo Y | chkdsk C: /f /r /x").await;
         Ok(CheckResult::err("Des erreurs ont été trouvées sur le disque C:. Une vérification complète (chkdsk /f /r) a été planifiée au prochain démarrage."))
     } else if already_scheduled {
-        Ok(CheckResult::err("CHKDSK est déjà planifié au prochain démarrage. Redémarrez l'ordinateur pour lancer la vérification."))
+        Ok(CheckResult::err("CHKDSK est déjà planifié au prochain démarrage. Redémarrer l'ordinateur pour lancer la vérification."))
     } else if exit_code == 0 || lower.contains("no problems found") || lower.contains("aucun problème") {
         Ok(CheckResult::ok("Le disque C: a été vérifié. Aucun problème détecté."))
     } else {
@@ -211,13 +211,13 @@ fn check_cryptolib_version() -> Result<CheckResult, String> {
                 let detail = if is_ok {
                     format!("Cryptolib CPS version {} — conforme (minimum requis : {}).", version, MIN_CRYPTOLIB_VERSION)
                 } else {
-                    format!("Cryptolib CPS version {} installée, mais {} minimum requis. Téléchargez la dernière version sur le site de l'ANS.", version, MIN_CRYPTOLIB_VERSION)
+                    format!("Cryptolib CPS version {} installée, mais {} minimum requis. Télécharger la dernière version sur le site de l'ANS.", version, MIN_CRYPTOLIB_VERSION)
                 };
                 Ok(CheckResult { is_ok, detail, not_found: false, ps_unavailable: false })
             }
             Err(_) => Ok(CheckResult::missing("Cryptolib CPS trouvé dans le registre mais la valeur 'Version' est manquante.")),
         },
-        Err(_) => Ok(CheckResult::missing("Cryptolib CPS n'est pas installé. Téléchargez-le depuis le portail de l'ANS (Agence du Numérique en Santé).")),
+        Err(_) => Ok(CheckResult::missing("Cryptolib CPS n'est pas installé. Télécharger le composant depuis le portail de l'ANS (Agence du Numérique en Santé).")),
     }
 }
 
@@ -401,9 +401,9 @@ async fn check_winre(app: tauri::AppHandle) -> Result<CheckResult, String> {
             if lower.contains("enabled") {
                 Ok(CheckResult::ok("Windows Recovery (WinRE) est activé et opérationnel."))
             } else if lower.contains("disabled") {
-                Ok(CheckResult::err("Windows Recovery (WinRE) est désactivé. Cliquez sur 'Réparer WinRE' pour le réactiver."))
+                Ok(CheckResult::err("Windows Recovery (WinRE) est désactivé. Cliquer sur 'Réparer WinRE' pour le réactiver."))
             } else if lower.contains("access") || lower.contains("administrator") || lower.contains("administrateur") {
-                Ok(CheckResult::unavailable("reagentc nécessite des droits administrateur. Relancez Dr Reco en tant qu'administrateur."))
+                Ok(CheckResult::unavailable("reagentc nécessite des droits administrateur. Relancer Dr Reco en tant qu'administrateur."))
             } else {
                 let preview: String = output.chars().take(300).collect();
                 Ok(CheckResult::unavailable(format!("Impossible de déterminer l'état de WinRE. Résultat : {}", preview.trim())))
@@ -451,7 +451,7 @@ async fn launch_windows_update(app: tauri::AppHandle) -> Result<CheckResult, Str
             if code == 0 {
                 Ok(CheckResult::ok("Windows Update a été lancé. Les mises à jour vont s'installer en arrière-plan."))
             } else {
-                Ok(CheckResult::err(format!("Windows Update a démarré mais a retourné le code {}. Vérifiez l'état dans les Paramètres → Windows Update.", code)))
+                Ok(CheckResult::err(format!("Windows Update a démarré mais a retourné le code {}. Vérifier l'état dans les Paramètres → Windows Update.", code)))
             }
         }
     }
@@ -494,7 +494,7 @@ async fn check_smartcard_reader(app: tauri::AppHandle) -> Result<CheckResult, St
         PsResult::Ok(output, _) => {
             let names: Vec<&str> = output.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
             if names.is_empty() {
-                Ok(CheckResult::err("Aucun lecteur de carte à puce détecté. Vérifiez que le lecteur est branché et que ses pilotes sont installés."))
+                Ok(CheckResult::err("Aucun lecteur de carte à puce détecté. Vérifier que le lecteur est branché et que ses pilotes sont installés."))
             } else {
                 Ok(CheckResult::ok(format!("Lecteur de carte à puce détecté : {}.", names.join(", "))))
             }
@@ -665,7 +665,7 @@ fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String
     let detail = if is_ok {
         format!("{} version {} — à jour (version majeure minimale : {}).", browser_label, installed, latest_major)
     } else {
-        format!("{} version {} — obsolète. La version {} ou supérieure est recommandée. Mettez à jour le navigateur.", browser_label, installed, latest_major)
+        format!("{} version {} — obsolète. La version {} ou supérieure est recommandée. Mettre à jour le navigateur.", browser_label, installed, latest_major)
     };
 
     Ok(BrowserVersionResult { browser: browser.clone(), browser_label: browser_label.into(), installed, latest_major, is_ok, detail, ps_unavailable: false })
@@ -683,7 +683,7 @@ async fn launch_browser_update(app: tauri::AppHandle, browser: String) -> Result
 
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lancer la mise à jour de {} — {}", label, e))),
-        PsResult::Ok(_, _) => Ok(CheckResult::ok(format!("La page de mise à jour de {} a été ouverte. Suivez les instructions dans le navigateur pour terminer la mise à jour.", label))),
+        PsResult::Ok(_, _) => Ok(CheckResult::ok(format!("La page de mise à jour de {} a été ouverte. Suivre les instructions dans le navigateur pour terminer la mise à jour.", label))),
     }
 }
 
