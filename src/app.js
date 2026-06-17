@@ -92,16 +92,8 @@ async function openUpdateModal() {
   modal.setAttribute('role', 'dialog')
   modal.setAttribute('aria-modal', 'true')
 
-  // Close button
-  const closeBtn = document.createElement('button')
-  closeBtn.className = 'dr-modal-close'
-  closeBtn.innerHTML = '✕'
-  closeBtn.setAttribute('aria-label', 'Fermer')
-  closeBtn.addEventListener('click', () => backdrop.remove())
-  modal.appendChild(closeBtn)
-
-  // Initial loading state
-  modal.innerHTML += `
+  // Static content first — then append interactive nodes so listeners survive
+  modal.innerHTML = `
     <h3>🔄 Vérification des mises à jour</h3>
     <div class="dr-modal-meta">
       Version installée :
@@ -114,6 +106,14 @@ async function openUpdateModal() {
     </div>
     <div class="dr-modal-actions" id="modal-actions"></div>
   `
+
+  // Close button appended after innerHTML so its event listener is not destroyed
+  const closeBtn = document.createElement('button')
+  closeBtn.className = 'dr-modal-close'
+  closeBtn.innerHTML = '✕'
+  closeBtn.setAttribute('aria-label', 'Fermer')
+  closeBtn.addEventListener('click', () => backdrop.remove())
+  modal.appendChild(closeBtn)
 
   backdrop.appendChild(modal)
   document.body.appendChild(backdrop)
@@ -168,29 +168,42 @@ async function fetchLatestRelease(modal, version) {
 
     // Actions
     if (isNewer) {
-      // Find the Windows installer asset
-      const assets  = release.assets || []
-      const installer = assets.find(a =>
-        /\.(exe|msi)$/i.test(a.name) && /windows|win|setup|install/i.test(a.name)
-      ) || assets.find(a => /\.(exe|msi)$/i.test(a.name))
+      const assets = release.assets || []
 
-      const downloadUrl = installer ? installer.browser_download_url : release.html_url
+      if (assets.length > 0) {
+        // One real anchor per asset — clicking opens via open_url
+        const list = document.createElement('div')
+        list.style.cssText = 'display:flex;flex-direction:column;gap:.4rem;width:100%'
 
-      const dlBtn = document.createElement('button')
-      dlBtn.className = 'btn-dr-primary'
-      dlBtn.innerHTML = `⬇️ Télécharger ${tag}`
-      dlBtn.addEventListener('click', async () => {
-        dlBtn.disabled = true
-        dlBtn.innerHTML = '<span class="dr-spinner"></span> Ouverture…'
-        try {
-          await invoke('open_url', { url: downloadUrl })
-          dlBtn.innerHTML = '✅ Téléchargement ouvert'
-        } catch {
-          dlBtn.disabled = false
-          dlBtn.innerHTML = `⬇️ Télécharger ${tag}`
-        }
-      })
-      actionsEl.appendChild(dlBtn)
+        assets.forEach(asset => {
+          const a = document.createElement('button')
+          a.className = 'btn-dr-primary'
+          a.style.justifyContent = 'flex-start'
+          a.innerHTML = `⬇️ ${escHtml(asset.name)}`
+          a.title = asset.browser_download_url
+          a.addEventListener('click', async () => {
+            a.disabled = true
+            a.innerHTML = `<span class="dr-spinner"></span> Ouverture…`
+            try {
+              await invoke('open_url', { url: asset.browser_download_url })
+              a.innerHTML = `✅ ${escHtml(asset.name)}`
+            } catch {
+              a.disabled = false
+              a.innerHTML = `⬇️ ${escHtml(asset.name)}`
+            }
+          })
+          list.appendChild(a)
+        })
+
+        actionsEl.appendChild(list)
+      } else {
+        // No assets — fall back to the release page
+        const dlBtn = document.createElement('button')
+        dlBtn.className = 'btn-dr-primary'
+        dlBtn.innerHTML = `⬇️ Voir la version ${tag} sur GitHub`
+        dlBtn.addEventListener('click', () => invoke('open_url', { url: release.html_url }))
+        actionsEl.appendChild(dlBtn)
+      }
     }
 
     const githubBtn = document.createElement('button')
