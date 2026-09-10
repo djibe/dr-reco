@@ -1,6 +1,6 @@
 # Dr Reco
 
-Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'entretien de son système Microsoft Windows (intégrité du système, stockage ...) ainsi que dans la gestion des paquets Amelipro (cryptolib, AmeliPro, plugin navigateur).
+Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'entretien de son système Microsoft Windows (intégrité du système, stockage ...) ainsi que dans la gestion des paquets Amelipro (cryptolib, composants Assurance maladie, plugin navigateur).
 
 ## ⏬ Télécharger la dernière version: [Dr Reco en dernière version](https://github.com/djibe/dr-reco/releases/latest/download/dr-reco.exe)
 
@@ -13,7 +13,7 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - Environnement de récupération Windows (WinRE)
 - Vérification des fichiers Windows (sfc, DISM)
 - Nettoyage du disque
-- Santé du disque (chkdsk)
+- Santé du système de fichiers (chkdsk)
 - Antivirus activé
 - Démarrage rapide de Windows activé
 - Ordinateur portable: santé de la batterie
@@ -23,7 +23,7 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 
 ## Verifications Ameli
 
-- Version de cryptolib et mise à jour
+- Version de Cryptolib et mise à jour
 - Version des services CNAM et mise à jour
 - Présence de lecteur de carte à puce
 - Version du navigateur
