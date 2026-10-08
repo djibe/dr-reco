@@ -33,6 +33,7 @@ export function renderAmelipro(container, navigate) {
 
     let cryptolibOutdated      = false
     let usbSuspendActive       = false
+    let scardNotAuto           = false
     let extensionMissingBrowser = null
     let detectedBrowser        = null
     let browserOutdated        = false
@@ -90,6 +91,28 @@ export function renderAmelipro(container, navigate) {
     } catch (e) {
       setCheck(scItem, 'warning', '⚠️', 'Lecteur de carte à puce',
         `La détection n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+    // ── Service Carte à puce (SCardSvr) ───────────────────────────────────────
+    const scardItem = addCheck(checksList, 'Service Carte à puce (SCardSvr)', 'Vérification du service Windows…')
+    try {
+      const r = await invoke('check_scard_service')
+      if (r.not_found) {
+        setCheck(scardItem, 'error', '❌', 'Service Carte à puce (SCardSvr)',
+          r.detail, { text: 'Introuvable', color: 'danger' })
+      } else if (r.ps_unavailable) {
+        setCheck(scardItem, 'warning', '⚠️', 'Service Carte à puce (SCardSvr)',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        scardNotAuto = !r.is_ok
+        setCheck(scardItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Service Carte à puce (SCardSvr)', r.detail,
+          r.is_ok ? { text: 'Automatique', color: 'success' } : { text: 'Démarrage manuel', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(scardItem, 'warning', '⚠️', 'Service Carte à puce (SCardSvr)',
+        `La vérification n'a pas pu être lancée : ${e}`,
         { text: 'Indisponible', color: 'warning' })
     }
 
@@ -175,7 +198,7 @@ export function renderAmelipro(container, navigate) {
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer l’analyse'
 
-    const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive].filter(Boolean).length
+    const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive, scardNotAuto].filter(Boolean).length
     if (issueCount === 0) {
       notify('Dr Reco — AmeliPro', '✅ Vérification terminée — Aucun problème détecté.')
     } else {
@@ -187,6 +210,7 @@ export function renderAmelipro(container, navigate) {
     if (extensionMissingBrowser)               addExtensionDownloadBlock(footer, extensionMissingBrowser)
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
     if (usbSuspendActive)                      addUsbSuspendBlock(footer)
+    if (scardNotAuto)                          addScardAutostartBlock(footer)
 
     const homeBtn = document.createElement('button')
     homeBtn.className = 'btn-dr-secondary mt-3'
@@ -366,6 +390,43 @@ function addUsbSuspendBlock(area) {
       result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '🔌 Réessayer'
+    }
+  })
+}
+
+// ── Smart Card service autostart block ────────────────────────────────────────
+
+function addScardAutostartBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '💳', label: 'Activer le démarrage automatique du service Carte à puce',
+    cmd: 'Set-Service SCardSvr -StartupType Automatic + Start-Service'
+  }, true)
+
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Configuration du service SCardSvr…</div></div>`
+    try {
+      const r = await invoke('enable_scard_autostart')
+      if (r.ps_unavailable) {
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '💳 Réessayer'
+      } else {
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Démarrage automatique activé' : '⚠️ Modification avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '💳 Réessayer'
     }
   })
 }

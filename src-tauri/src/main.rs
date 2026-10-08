@@ -1043,6 +1043,71 @@ async fn run_compact_os(app: tauri::AppHandle) -> Result<CheckResult, String> {
     }
 }
 
+// ─── Smart Card service (SCardSvr) ────────────────────────────────────────────
+// The CPS card reader relied on by Amelipro requires the Windows Smart Card
+// service to start automatically, otherwise the reader may not be detected.
+#[tauri::command]
+async fn check_scard_service(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+$svc = Get-Service -Name SCardSvr -ErrorAction SilentlyContinue
+if ($null -eq $svc) { Write-Output "missing" }
+else { Write-Output "$($svc.StartType)|$($svc.Status)" }
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de vérifier le service Carte à puce — {}", e)
+        )),
+        PsResult::Ok(output, _) => {
+            let line = output.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
+            if line == "missing" || line.is_empty() {
+                return Ok(CheckResult::missing(
+                    "Service Carte à puce (SCardSvr) introuvable sur cet ordinateur. Le lecteur de carte vitale risque de ne pas fonctionner."
+                ));
+            }
+            let parts: Vec<&str> = line.splitn(2, '|').collect();
+            let start_type = parts.first().copied().unwrap_or("").trim();
+            let status = parts.get(1).copied().unwrap_or("").trim();
+            if start_type.eq_ignore_ascii_case("Automatic") {
+                Ok(CheckResult::ok(format!(
+                    "Service Carte à puce (SCardSvr) en démarrage automatique (état : {}). Le lecteur de carte sera détecté au branchement.",
+                    status
+                )))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "Service Carte à puce (SCardSvr) en démarrage {} (état : {}). Le lecteur de carte risque de ne pas être détecté. Cliquer sur « Activer le démarrage automatique » pour corriger.",
+                    start_type, status
+                )))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn enable_scard_autostart(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+Set-Service -Name SCardSvr -StartupType Automatic -ErrorAction Stop
+Start-Service -Name SCardSvr -ErrorAction SilentlyContinue
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de configurer le service Carte à puce — {}", e)
+        )),
+        PsResult::Ok(output, code) => {
+            if code == 0 {
+                Ok(CheckResult::ok(
+                    "Service Carte à puce (SCardSvr) configuré en démarrage automatique et démarré avec succès."
+                ))
+            } else {
+                let preview: String = output.chars().take(300).collect();
+                Ok(CheckResult::err(format!(
+                    "La configuration du service a échoué (code {}). Des droits administrateur sont peut-être nécessaires. Résultat : {}",
+                    code, preview.trim()
+                )))
+            }
+        }
+    }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 fn main() {
     tauri::Builder::default()
@@ -1064,6 +1129,8 @@ fn main() {
             launch_windows_update,
             check_services_cnam,
             check_smartcard_reader,
+            check_scard_service,
+            enable_scard_autostart,
             check_browser_and_extension,
             check_browser_version,
             launch_browser_update,
