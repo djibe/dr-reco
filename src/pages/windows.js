@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { getOsInfo, getRamInfo } from 'tauri-plugin-hwinfo'
 import { notify } from '../notify.js'
 
-const MIN_BUILD  = 26200
+const MIN_BUILD  = 26300
 const MIN_RAM_MB = 15 * 1024
 
 export function renderWindows(container, navigate) {
@@ -103,7 +103,7 @@ export function renderWindows(container, navigate) {
         setCheck(vItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️',
           'Version de Windows',
           ok ? `${osInfo.name} (build ${build}) — Version conforme.`
-             : `${osInfo.name} (build ${build}) — Windows 11 25H2 est requis. Mettre à jour via Windows Update (ou forcer avec l’outil FlyOOBE).`,
+             : `${osInfo.name} (build ${build}) — Windows 11 26H2 est requis. Mettre à jour via Windows Update (ou forcer avec l’outil FlyOOBE).`,
           ok ? { text: 'Conforme', color: 'success' } : { text: 'Mise à jour requise', color: 'warning' })
       } catch (e) {
         setCheck(vItem, 'warning', '⚠️', 'Version de Windows',

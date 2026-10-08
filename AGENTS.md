@@ -107,7 +107,7 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
   `await invoke('command_name', { args })`. Handle `ps_unavailable` (warning)
   and user cancellation (the `cancelled` pattern in `windows.js`).
 - Hardware info: `getOsInfo()` / `getRamInfo()` from `tauri-plugin-hwinfo`
-  (current thresholds: build ≥ 26200, RAM ≥ 15 GB — see `windows.js`).
+  (current thresholds: build ≥ 26300, RAM ≥ 15 GB — see `windows.js`).
 - Notifications via `src/notify.js`. Styles: reuse existing classes
   (`dr-*`, `btn-dr-primary/secondary/subtle`) from `src/style.css`.
 - **All visible strings in French**. Escape injected HTML (see `escHtml` in `app.js`).
