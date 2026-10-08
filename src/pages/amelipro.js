@@ -34,6 +34,7 @@ export function renderAmelipro(container, navigate) {
     let cryptolibOutdated      = false
     let usbSuspendActive       = false
     let usb3LpmActive          = false
+    let usbHubTimeoutActive    = false
     let scardNotAuto           = false
     let extensionMissingBrowser = null
     let detectedBrowser        = null
@@ -216,11 +217,32 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+    // ── Délai de mise en veille des hubs USB ───────────────────────────────────
+    const usbHubItem = addCheck(checksList, 'Délai de mise en veille des hubs USB', 'Lecture du plan d’alimentation…')
+    try {
+      const r = await invoke('check_usb_hub_timeout')
+      if (r.not_found) {
+        usbHubItem.remove()
+      } else if (r.ps_unavailable) {
+        setCheck(usbHubItem, 'warning', '⚠️', 'Délai de mise en veille des hubs USB',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        usbHubTimeoutActive = !r.is_ok
+        setCheck(usbHubItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Délai de mise en veille des hubs USB', r.detail,
+          r.is_ok ? { text: 'Désactivé', color: 'success' } : { text: 'Activé', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(usbHubItem, 'warning', '⚠️', 'Délai de mise en veille des hubs USB',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
     // ── Done ──────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer l’analyse'
 
-    const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive, usb3LpmActive, scardNotAuto].filter(Boolean).length
+    const issueCount = [cryptolibOutdated, cnamOutdated, extensionMissingBrowser, browserOutdated, usbSuspendActive, usb3LpmActive, usbHubTimeoutActive, scardNotAuto].filter(Boolean).length
     if (issueCount === 0) {
       notify('Dr Reco — AmeliPro', '✅ Vérification terminée — Aucun problème détecté.')
     } else {
@@ -233,6 +255,7 @@ export function renderAmelipro(container, navigate) {
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
     if (usbSuspendActive)                      addUsbSuspendBlock(footer)
     if (usb3LpmActive)                         addUsb3LpmBlock(footer)
+    if (usbHubTimeoutActive)                   addUsbHubTimeoutBlock(footer)
     if (scardNotAuto)                          addScardAutostartBlock(footer)
 
     const homeBtn = document.createElement('button')
@@ -450,6 +473,43 @@ function addUsb3LpmBlock(area) {
       result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '⚡ Réessayer'
+    }
+  })
+}
+
+// ── USB Hub Selective Suspend Timeout disable block ───────────────────────────
+
+function addUsbHubTimeoutBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '⏱️', label: 'Désactiver le délai de mise en veille des hubs USB',
+    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 ms puis /SETACTIVE'
+  }, true)
+
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
+    try {
+      const r = await invoke('disable_usb_hub_timeout')
+      if (r.ps_unavailable) {
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '⏱️ Réessayer'
+      } else {
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Délai des hubs USB désactivé' : '⚠️ Modification avec avertissements'
+      }
+    } catch (e) {
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '⏱️ Réessayer'
     }
   })
 }

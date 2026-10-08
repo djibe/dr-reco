@@ -1050,6 +1050,85 @@ powercfg /SETACTIVE SCHEME_CURRENT
     }
 }
 
+// ─── USB Hub Selective Suspend Timeout ────────────────────────────────────────
+// Idle timeout (in milliseconds) after which Windows powers down USB hubs.
+// Value 0 disables the timeout. Target state is 0 on AC and DC so card
+// readers are never suspended.
+#[tauri::command]
+async fn check_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+$sub  = "2a737441-1930-4402-8d77-b2bebba308a3"
+$set  = "0853a681-27c8-4100-a2fd-82013e970683"
+$q    = powercfg /QUERY SCHEME_CURRENT $sub $set 2>&1
+function Get-Ms($label) {
+    $line = ($q | Select-String $label | Select-Object -First 1)
+    if ($null -eq $line) { return -1 }
+    $s = $line.ToString()
+    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
+    return -1
+}
+$ac = Get-Ms "Current AC Power Setting Index"
+$dc = Get-Ms "Current DC Power Setting Index"
+if ($ac -lt 0 -and $dc -lt 0) { Write-Output "unavailable" } else { Write-Output "ac=$ac dc=$dc" }
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lire le délai des hubs USB — {}", e))),
+        PsResult::Ok(output, _) => {
+            let line = output
+                .lines()
+                .map(|l| l.trim())
+                .find(|l| l.contains("ac="))
+                .unwrap_or("")
+                .to_string();
+            if line.is_empty() {
+                return Ok(CheckResult { is_ok: true,
+                    detail: "Le délai de mise en veille des hubs USB n'est pas disponible sur ce plan d'alimentation.".into(),
+                    not_found: true, ps_unavailable: false });
+            }
+            let parse_ms = |prefix: &str| -> i64 {
+                line.split_whitespace()
+                    .find(|p| p.starts_with(prefix))
+                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
+                    .unwrap_or(-1)
+            };
+            let ac = parse_ms("ac=");
+            let dc = parse_ms("dc=");
+            if ac < 0 || dc < 0 {
+                return Ok(CheckResult { is_ok: true,
+                    detail: "Le délai de mise en veille des hubs USB n'est pas disponible sur ce plan d'alimentation.".into(),
+                    not_found: true, ps_unavailable: false });
+            }
+            if ac == 0 && dc == 0 {
+                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) — Les hubs USB restent alimentés en permanence."))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "Délai de mise en veille des hubs USB actif (secteur : {} ms, batterie : {} ms) — Windows peut couper l'alimentation des hubs USB au repos, ce qui peut provoquer des déconnexions du lecteur de carte.",
+                    ac, dc
+                )))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn disable_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 0853a681-27c8-4100-a2fd-82013e970683 0
+powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 0853a681-27c8-4100-a2fd-82013e970683 0
+powercfg /SETACTIVE SCHEME_CURRENT
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de modifier le plan d'alimentation — {}", e))),
+        PsResult::Ok(_, code) => {
+            if code == 0 {
+                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) avec succès. Les hubs USB resteront alimentés en permanence."))
+            } else {
+                Ok(CheckResult::err(format!("La désactivation a échoué (code {}). Des droits administrateur sont peut-être nécessaires.", code)))
+            }
+        }
+    }
+}
+
 // ─── DISM Component Cleanup ───────────────────────────────────────────────────
 #[tauri::command]
 async fn run_dism_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> {
@@ -1207,6 +1286,8 @@ fn main() {
             disable_usb_suspend,
             check_usb3_lpm,
             disable_usb3_lpm,
+            check_usb_hub_timeout,
+            disable_usb_hub_timeout,
             run_dism_cleanup,
             run_compact_os,
         ])
