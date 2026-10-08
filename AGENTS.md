@@ -117,7 +117,7 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 ## 7. Versions & release
 
 - **Keep the 3 files in sync** on every release: `package.json`,
-  `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (currently `0.6.1`).
+  `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (currently `0.6.2`).
 - Windows metadata (name, copyright, `CompanyName`) lives in
   `[package.metadata.tauri-winres]` in `Cargo.toml`.
 - Minimal permissions in `src-tauri/capabilities/default.json`: only add a
