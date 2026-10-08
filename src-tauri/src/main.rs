@@ -987,6 +987,69 @@ powercfg /SETACTIVE SCHEME_CURRENT
     }
 }
 
+// ─── USB 3 Link Power Management ─────────────────────────────────────────────
+// Prevents Windows from putting USB 3 links into U1/U2 low-power states,
+// which can disconnect CPS card readers. 0 = Off, 1 = Minimum, 2 = Moderate,
+// 3 = Maximum power savings. Target state is Off (0) on AC and DC.
+#[tauri::command]
+async fn check_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+$sub  = "2a737441-1930-4402-8d77-b2bebba308a3"
+$set  = "d4e98f31-5ffe-4ce1-be31-1b38b384c009"
+$q    = powercfg /QUERY SCHEME_CURRENT $sub $set 2>&1
+$ac   = ($q | Select-String "Current AC Power Setting Index").ToString() -replace '.*:\s*0x0*',''
+$dc   = ($q | Select-String "Current DC Power Setting Index").ToString() -replace '.*:\s*0x0*',''
+Write-Output "ac=$ac dc=$dc"
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lire la configuration USB 3 — {}", e))),
+        PsResult::Ok(output, _) => {
+            let line = output.trim();
+            if !line.contains("ac=") {
+                return Ok(CheckResult { is_ok: true,
+                    detail: "La gestion de l'alimentation de la liaison USB 3 n'est pas disponible sur ce plan d'alimentation.".into(),
+                    not_found: true, ps_unavailable: false });
+            }
+            let level_label = |v: &str| match v {
+                "0" => "désactivée (Off)",
+                "1" => "économies minimales",
+                "2" => "économies modérées",
+                "3" => "économies maximales",
+                _ => "activée",
+            };
+            let ac = line.split_whitespace().find(|p| p.starts_with("ac=")).map(|p| p.trim_start_matches("ac=")).unwrap_or("");
+            let dc = line.split_whitespace().find(|p| p.starts_with("dc=")).map(|p| p.trim_start_matches("dc=")).unwrap_or("");
+            if ac == "0" && dc == "0" {
+                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) — Les périphériques USB 3 restent alimentés en permanence."))
+            } else {
+                Ok(CheckResult::err(format!(
+                    "Gestion de l'alimentation de la liaison USB 3 activée (secteur : {}, batterie : {}) — Windows peut mettre les liaisons USB 3 en veille (états U1/U2), ce qui peut provoquer des déconnexions du lecteur de carte.",
+                    level_label(ac), level_label(dc)
+                )))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn disable_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"
+powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 d4e98f31-5ffe-4ce1-be31-1b38b384c009 0
+powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 d4e98f31-5ffe-4ce1-be31-1b38b384c009 0
+powercfg /SETACTIVE SCHEME_CURRENT
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de modifier le plan d'alimentation — {}", e))),
+        PsResult::Ok(_, code) => {
+            if code == 0 {
+                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) avec succès. Les périphériques USB 3 resteront alimentés en permanence."))
+            } else {
+                Ok(CheckResult::err(format!("La désactivation a échoué (code {}). Des droits administrateur sont peut-être nécessaires.", code)))
+            }
+        }
+    }
+}
+
 // ─── DISM Component Cleanup ───────────────────────────────────────────────────
 #[tauri::command]
 async fn run_dism_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> {
@@ -1142,6 +1205,8 @@ fn main() {
             enable_qmr,
             check_usb_suspend,
             disable_usb_suspend,
+            check_usb3_lpm,
+            disable_usb3_lpm,
             run_dism_cleanup,
             run_compact_os,
         ])
