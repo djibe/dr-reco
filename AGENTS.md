@@ -5,6 +5,10 @@
 > must be written in French, but all code stays in English** (identifiers,
 > function names, comments, commit messages).
 
+## IMPORTANT
+
+NEVER trigger any CI/CD pipeline automatically.
+
 ## 1. Overview
 
 **Dr Reco** helps general practitioners maintain their Windows workstation
