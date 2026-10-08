@@ -26,6 +26,7 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - Version de Cryptolib et mise à jour
 - Version des services CNAM et mise à jour
 - Présence de lecteur de carte à puce
+- Activation du service Windows pour la lecture de carte à puce
 - Version du navigateur
 - Extension navigateur pour la lecture de la carte vitale
 - Désactivation de la mise en veille USB (éviter les déconnexions du lecteur CPS)
