@@ -32,9 +32,9 @@ export function renderAmelipro(container, navigate) {
     footer.innerHTML = ''
 
     let cryptolibOutdated      = false
+    let usbHubTimeoutActive    = false
     let usbSuspendActive       = false
     let usb3LpmActive          = false
-    let usbHubTimeoutActive    = false
     let scardNotAuto           = false
     let extensionMissingBrowser = null
     let detectedBrowser        = null
@@ -175,49 +175,7 @@ export function renderAmelipro(container, navigate) {
       }
     }
 
-    // ── Mise en veille sélective USB ──────────────────────────────────────────
-    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d’alimentation…')
-    try {
-      const r = await invoke('check_usb_suspend')
-      if (r.not_found) {
-        usbItem.remove()
-      } else if (r.ps_unavailable) {
-        setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
-          r.detail, { text: 'Indisponible', color: 'warning' })
-      } else {
-        usbSuspendActive = !r.is_ok
-        setCheck(usbItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
-          'Mise en veille sélective USB', r.detail,
-          r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
-      }
-    } catch (e) {
-      setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
-        `La vérification n'a pas pu être lancée : ${e}`,
-        { text: 'Indisponible', color: 'warning' })
-    }
-
-    // ── Gestion de l’alimentation de la liaison USB 3 ─────────────────────────
-    const usb3Item = addCheck(checksList, 'Gestion de l’alimentation de la liaison USB 3', 'Lecture du plan d’alimentation…')
-    try {
-      const r = await invoke('check_usb3_lpm')
-      if (r.not_found) {
-        usb3Item.remove()
-      } else if (r.ps_unavailable) {
-        setCheck(usb3Item, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
-          r.detail, { text: 'Indisponible', color: 'warning' })
-      } else {
-        usb3LpmActive = !r.is_ok
-        setCheck(usb3Item, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
-          'Gestion de l’alimentation de la liaison USB 3', r.detail,
-          r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
-      }
-    } catch (e) {
-      setCheck(usb3Item, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
-        `La vérification n'a pas pu être lancée : ${e}`,
-        { text: 'Indisponible', color: 'warning' })
-    }
-
-    // ── Délai de mise en veille des hubs USB ───────────────────────────────────
+    // ── 1. Délai de mise en veille des hubs USB ───────────────────────────────
     const usbHubItem = addCheck(checksList, 'Délai de mise en veille des hubs USB', 'Lecture du plan d’alimentation…')
     try {
       const r = await invoke('check_usb_hub_timeout')
@@ -238,6 +196,48 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+    // ── 2. Mise en veille sélective USB ────────────────────────────────────────
+    const usbItem = addCheck(checksList, 'Mise en veille sélective USB', 'Lecture du plan d’alimentation…')
+    try {
+      const r = await invoke('check_usb_suspend')
+      if (r.not_found) {
+        usbItem.remove()
+      } else if (r.ps_unavailable) {
+        setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        usbSuspendActive = !r.is_ok
+        setCheck(usbItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Mise en veille sélective USB', r.detail,
+          r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+    // ── 3. Gestion de l’alimentation de la liaison USB 3 ───────────────────────
+    const usb3Item = addCheck(checksList, 'Gestion de l’alimentation de la liaison USB 3', 'Lecture du plan d’alimentation…')
+    try {
+      const r = await invoke('check_usb3_lpm')
+      if (r.not_found) {
+        usb3Item.remove()
+      } else if (r.ps_unavailable) {
+        setCheck(usb3Item, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else {
+        usb3LpmActive = !r.is_ok
+        setCheck(usb3Item, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+          'Gestion de l’alimentation de la liaison USB 3', r.detail,
+          r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(usb3Item, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
     // ── Done ──────────────────────────────────────────────────────────────────
     launchBtn.disabled = false
     launchBtn.innerHTML = '🔄 Relancer l’analyse'
@@ -253,9 +253,9 @@ export function renderAmelipro(container, navigate) {
     if (cnamOutdated)                          addDownloadBlock(footer, { icon: '📦', label: 'Mettre à jour les Services CNAM',       cmd: 'espacepro.ameli.fr — Section Aide',                           url: CNAM_URL,       btnLabel: '⬇️ Télécharger les Services CNAM',  successMsg: 'La page de téléchargement AmeliPro a été ouverte dans le navigateur.' })
     if (extensionMissingBrowser)               addExtensionDownloadBlock(footer, extensionMissingBrowser)
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
-    if (usbSuspendActive)                      addUsbSuspendBlock(footer)
-    if (usb3LpmActive)                         addUsb3LpmBlock(footer)
-    if (usbHubTimeoutActive)                   addUsbHubTimeoutBlock(footer)
+    if (usbHubTimeoutActive)                   addUsbHubTimeoutBlock(footer, usbHubItem)
+    if (usbSuspendActive)                      addUsbSuspendBlock(footer, usbItem)
+    if (usb3LpmActive)                         addUsb3LpmBlock(footer, usb3Item)
     if (scardNotAuto)                          addScardAutostartBlock(footer)
 
     const homeBtn = document.createElement('button')
@@ -403,83 +403,9 @@ function addBrowserUpdateBlock(area, browser) {
   })
 }
 
-// ── USB Selective Suspend disable block ───────────────────────────────────────
-
-function addUsbSuspendBlock(area) {
-  const block = makeRepairBlock(area, {
-    icon: '🔌', label: 'Désactiver la mise en veille sélective USB',
-    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE'
-  }, true)
-
-  const btn    = block.querySelector('.repair-btn')
-  const result = block.querySelector('.dr-repair-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
-    result.className = 'dr-repair-result dr-check status-running fade-up'
-    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
-    try {
-      const r = await invoke('disable_usb_suspend')
-      if (r.ps_unavailable) {
-        result.className = 'dr-repair-result dr-check status-warning fade-up'
-        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '🔌 Réessayer'
-      } else {
-        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Mise en veille USB désactivée' : '⚠️ Modification avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'dr-repair-result dr-check status-warning fade-up'
-      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '🔌 Réessayer'
-    }
-  })
-}
-
-// ── USB 3 Link Power Management disable block ─────────────────────────────────
-
-function addUsb3LpmBlock(area) {
-  const block = makeRepairBlock(area, {
-    icon: '⚡', label: 'Désactiver la gestion de l’alimentation USB 3',
-    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 (Off) puis /SETACTIVE'
-  }, true)
-
-  const btn    = block.querySelector('.repair-btn')
-  const result = block.querySelector('.dr-repair-result')
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true
-    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
-    result.className = 'dr-repair-result dr-check status-running fade-up'
-    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
-    try {
-      const r = await invoke('disable_usb3_lpm')
-      if (r.ps_unavailable) {
-        result.className = 'dr-repair-result dr-check status-warning fade-up'
-        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
-        btn.disabled = false
-        btn.innerHTML = '⚡ Réessayer'
-      } else {
-        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
-        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
-        btn.innerHTML = r.is_ok ? '✅ Alimentation USB 3 désactivée' : '⚠️ Modification avec avertissements'
-      }
-    } catch (e) {
-      result.className = 'dr-repair-result dr-check status-warning fade-up'
-      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
-      btn.disabled = false
-      btn.innerHTML = '⚡ Réessayer'
-    }
-  })
-}
-
 // ── USB Hub Selective Suspend Timeout disable block ───────────────────────────
 
-function addUsbHubTimeoutBlock(area) {
+function addUsbHubTimeoutBlock(area, checkItem) {
   const block = makeRepairBlock(area, {
     icon: '⏱️', label: 'Désactiver le délai de mise en veille des hubs USB',
     cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 ms puis /SETACTIVE'
@@ -487,6 +413,20 @@ function addUsbHubTimeoutBlock(area) {
 
   const btn    = block.querySelector('.repair-btn')
   const result = block.querySelector('.dr-repair-result')
+
+  const refreshCheckItem = (r) => {
+    if (!checkItem || !checkItem.isConnected) return
+    if (r.not_found) {
+      checkItem.remove()
+    } else if (r.ps_unavailable) {
+      setCheck(checkItem, 'warning', '⚠️', 'Délai de mise en veille des hubs USB',
+        r.detail, { text: 'Indisponible', color: 'warning' })
+    } else {
+      setCheck(checkItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+        'Délai de mise en veille des hubs USB', r.detail,
+        r.is_ok ? { text: 'Désactivé', color: 'success' } : { text: 'Activé', color: 'warning' })
+    }
+  }
 
   btn.addEventListener('click', async () => {
     btn.disabled = true
@@ -504,12 +444,147 @@ function addUsbHubTimeoutBlock(area) {
         result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
         result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
         btn.innerHTML = r.is_ok ? '✅ Délai des hubs USB désactivé' : '⚠️ Modification avec avertissements'
+        if (r.is_ok) {
+          try {
+            const fresh = await invoke('check_usb_hub_timeout')
+            refreshCheckItem(fresh)
+          } catch (_) {
+            // Keep the repair result visible; the check card stays as-is.
+          }
+        }
+        if (!r.is_ok) {
+          btn.disabled = false
+        }
       }
     } catch (e) {
       result.className = 'dr-repair-result dr-check status-warning fade-up'
       result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
       btn.disabled = false
       btn.innerHTML = '⏱️ Réessayer'
+    }
+  })
+}
+
+// ── USB Selective Suspend disable block ───────────────────────────────────────
+
+function addUsbSuspendBlock(area, checkItem) {
+  const block = makeRepairBlock(area, {
+    icon: '🔌', label: 'Désactiver la mise en veille sélective USB',
+    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE'
+  }, true)
+
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
+
+  const refreshCheckItem = (r) => {
+    if (!checkItem || !checkItem.isConnected) return
+    if (r.not_found) {
+      checkItem.remove()
+    } else if (r.ps_unavailable) {
+      setCheck(checkItem, 'warning', '⚠️', 'Mise en veille sélective USB',
+        r.detail, { text: 'Indisponible', color: 'warning' })
+    } else {
+      setCheck(checkItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+        'Mise en veille sélective USB', r.detail,
+        r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
+    }
+  }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
+    try {
+      const r = await invoke('disable_usb_suspend')
+      if (r.ps_unavailable) {
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '🔌 Réessayer'
+      } else {
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Mise en veille USB désactivée' : '⚠️ Modification avec avertissements'
+        if (r.is_ok) {
+          try {
+            const fresh = await invoke('check_usb_suspend')
+            refreshCheckItem(fresh)
+          } catch (_) {
+            // Keep the repair result visible; the check card stays as-is.
+          }
+        }
+        if (!r.is_ok) {
+          btn.disabled = false
+        }
+      }
+    } catch (e) {
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '🔌 Réessayer'
+    }
+  })
+}
+
+// ── USB 3 Link Power Management disable block ─────────────────────────────────
+
+function addUsb3LpmBlock(area, checkItem) {
+  const block = makeRepairBlock(area, {
+    icon: '⚡', label: 'Désactiver la gestion de l’alimentation USB 3',
+    cmd: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 (Off) puis /SETACTIVE'
+  }, true)
+
+  const btn    = block.querySelector('.repair-btn')
+  const result = block.querySelector('.dr-repair-result')
+
+  const refreshCheckItem = (r) => {
+    if (!checkItem || !checkItem.isConnected) return
+    if (r.not_found) {
+      checkItem.remove()
+    } else if (r.ps_unavailable) {
+      setCheck(checkItem, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
+        r.detail, { text: 'Indisponible', color: 'warning' })
+    } else {
+      setCheck(checkItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+        'Gestion de l’alimentation de la liaison USB 3', r.detail,
+        r.is_ok ? { text: 'Désactivée', color: 'success' } : { text: 'Activée', color: 'warning' })
+    }
+  }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    btn.innerHTML = '<span class="dr-spinner"></span> Application en cours…'
+    result.className = 'dr-repair-result dr-check status-running fade-up'
+    result.innerHTML = `<div class="dr-check-icon">⏳</div><div class="dr-check-body"><div class="dr-check-detail">Modification du plan d'alimentation…</div></div>`
+    try {
+      const r = await invoke('disable_usb3_lpm')
+      if (r.ps_unavailable) {
+        result.className = 'dr-repair-result dr-check status-warning fade-up'
+        result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.disabled = false
+        btn.innerHTML = '⚡ Réessayer'
+      } else {
+        result.className = `dr-repair-result dr-check status-${r.is_ok ? 'success' : 'warning'} fade-up`
+        result.innerHTML = `<div class="dr-check-icon">${r.is_ok ? '✅' : '⚠️'}</div><div class="dr-check-body"><div class="dr-check-detail">${r.detail}</div></div>`
+        btn.innerHTML = r.is_ok ? '✅ Alimentation USB 3 désactivée' : '⚠️ Modification avec avertissements'
+        if (r.is_ok) {
+          try {
+            const fresh = await invoke('check_usb3_lpm')
+            refreshCheckItem(fresh)
+          } catch (_) {
+            // Keep the repair result visible; the check card stays as-is.
+          }
+        }
+        if (!r.is_ok) {
+          btn.disabled = false
+        }
+      }
+    } catch (e) {
+      result.className = 'dr-repair-result dr-check status-warning fade-up'
+      result.innerHTML = `<div class="dr-check-icon">⚠️</div><div class="dr-check-body"><div class="dr-check-detail">La modification n'a pas pu être appliquée : ${e}</div></div>`
+      btn.disabled = false
+      btn.innerHTML = '⚡ Réessayer'
     }
   })
 }
