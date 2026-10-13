@@ -180,7 +180,8 @@ export function renderAmelipro(container, navigate) {
     try {
       const r = await invoke('check_usb_hub_timeout')
       if (r.not_found) {
-        usbHubItem.remove()
+        setCheck(usbHubItem, 'cancelled', 'ℹ️', 'Délai de mise en veille des hubs USB',
+          r.detail, { text: 'Non concerné', color: 'subtle' })
       } else if (r.ps_unavailable) {
         setCheck(usbHubItem, 'warning', '⚠️', 'Délai de mise en veille des hubs USB',
           r.detail, { text: 'Indisponible', color: 'warning' })
@@ -201,7 +202,8 @@ export function renderAmelipro(container, navigate) {
     try {
       const r = await invoke('check_usb_suspend')
       if (r.not_found) {
-        usbItem.remove()
+        setCheck(usbItem, 'cancelled', 'ℹ️', 'Mise en veille sélective USB',
+          r.detail, { text: 'Non concerné', color: 'subtle' })
       } else if (r.ps_unavailable) {
         setCheck(usbItem, 'warning', '⚠️', 'Mise en veille sélective USB',
           r.detail, { text: 'Indisponible', color: 'warning' })
@@ -222,7 +224,8 @@ export function renderAmelipro(container, navigate) {
     try {
       const r = await invoke('check_usb3_lpm')
       if (r.not_found) {
-        usb3Item.remove()
+        setCheck(usb3Item, 'cancelled', 'ℹ️', 'Gestion de l’alimentation de la liaison USB 3',
+          r.detail, { text: 'Non concerné', color: 'subtle' })
       } else if (r.ps_unavailable) {
         setCheck(usb3Item, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
           r.detail, { text: 'Indisponible', color: 'warning' })
@@ -417,7 +420,8 @@ function addUsbHubTimeoutBlock(area, checkItem) {
   const refreshCheckItem = (r) => {
     if (!checkItem || !checkItem.isConnected) return
     if (r.not_found) {
-      checkItem.remove()
+      setCheck(checkItem, 'cancelled', 'ℹ️', 'Délai de mise en veille des hubs USB',
+        r.detail, { text: 'Non concerné', color: 'subtle' })
     } else if (r.ps_unavailable) {
       setCheck(checkItem, 'warning', '⚠️', 'Délai de mise en veille des hubs USB',
         r.detail, { text: 'Indisponible', color: 'warning' })
@@ -479,7 +483,8 @@ function addUsbSuspendBlock(area, checkItem) {
   const refreshCheckItem = (r) => {
     if (!checkItem || !checkItem.isConnected) return
     if (r.not_found) {
-      checkItem.remove()
+      setCheck(checkItem, 'cancelled', 'ℹ️', 'Mise en veille sélective USB',
+        r.detail, { text: 'Non concerné', color: 'subtle' })
     } else if (r.ps_unavailable) {
       setCheck(checkItem, 'warning', '⚠️', 'Mise en veille sélective USB',
         r.detail, { text: 'Indisponible', color: 'warning' })
@@ -541,7 +546,8 @@ function addUsb3LpmBlock(area, checkItem) {
   const refreshCheckItem = (r) => {
     if (!checkItem || !checkItem.isConnected) return
     if (r.not_found) {
-      checkItem.remove()
+      setCheck(checkItem, 'cancelled', 'ℹ️', 'Gestion de l’alimentation de la liaison USB 3',
+        r.detail, { text: 'Non concerné', color: 'subtle' })
     } else if (r.ps_unavailable) {
       setCheck(checkItem, 'warning', '⚠️', 'Gestion de l’alimentation de la liaison USB 3',
         r.detail, { text: 'Indisponible', color: 'warning' })
