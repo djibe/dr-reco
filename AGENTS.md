@@ -66,7 +66,7 @@ src/
     about.js     # about page
 
 src-tauri/
-  src/main.rs               # ALL backend code: helpers + ~27 Tauri commands
+  src/main.rs               # ALL backend code: helpers + 31 Tauri commands
   tauri.conf.json           # app config (920×700 window, Dark theme, bundle)
   capabilities/default.json # Tauri permissions (core, hwinfo, shell, notification)
   Cargo.toml / Cargo.lock   # Rust dependencies
@@ -149,7 +149,7 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 - **Windows-only**: `Get-CimInstance`, `reagentc`, `HKLM` keys… do not work
   elsewhere. Do not "fix" things by breaking Windows compatibility.
 - **Hardcoded versions**: Cryptolib min `5.2.6`, `SrvSvCnam 5.10.04`, browser
-  majors (Chrome 153 / Firefox 155 / Edge 152) — update periodically, flag any
+  majors (Chrome 155 / Firefox 157 / Edge 155) — update periodically, flag any
   stale value instead of letting it rot.
 - Do not add npm/crate dependencies without real need (maintenance surface + Windows bundle).
 - Do not commit `todo.md`, `dist/`, `target/`, `node_modules/`.
@@ -157,7 +157,6 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 ## 10. Current state & roadmap
 
 - The working roadmap lives in **`todo.md` (local, unversioned)**: check it at
-  the start of a session for context (e.g. SCardSvr, USB power management,
-  package signing, update page).
+  the start of a session for context (e.g. package signing, update page).
 - Before a session: read `README.md` (functional scope), `todo.md`
   (work in progress) and `git log --oneline -10` (recent history).

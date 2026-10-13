@@ -7,7 +7,7 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 ## Verifications Windows
 
 - Point de restauration système
-- Version de Windows
+- Version de Windows (Windows 11 26H2, build ≥ 26300)
 - Taille de la mémoire vive (RAM)
 - Type de stockage (SSD)
 - Environnement de récupération Windows (WinRE)
@@ -26,9 +26,12 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - Version de Cryptolib et mise à jour
 - Version des services CNAM et mise à jour
 - Présence de lecteur de carte à puce
-- Activation du service Windows pour la lecture de carte à puce
+- Service Carte à puce (SCardSvr) : démarrage automatique et service démarré (réparation en 1 clic)
 - Version du navigateur
 - Extension navigateur pour la lecture de la carte vitale
-- Désactivation de la mise en veille USB (éviter les déconnexions du lecteur CPS)
+- Désactivation du délai de mise en veille des hubs USB
+- Désactivation de la mise en veille sélective USB
+- Désactivation de la gestion de l'alimentation de la liaison USB 3
+  (éviter les déconnexions du lecteur CPS)
 
 <img width="922" height="732" alt="image" src="https://github.com/user-attachments/assets/285359b3-67e6-40b6-ae9c-8e6f7a1812a8">
