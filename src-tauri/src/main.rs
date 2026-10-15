@@ -1017,6 +1017,9 @@ fn reveal_power_setting(sub: &str, setting: &str) -> bool {
 //    card readers are never suspended.
 #[tauri::command]
 async fn disable_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     // Reveal the setting in Windows power options (Attributes 2 = visible).
     let revealed = reveal_power_setting(
         USB_SUBGROUP,
@@ -1064,6 +1067,9 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 //    power down individual USB ports when idle. 0 = Disabled.
 #[tauri::command]
 async fn disable_usb_suspend(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     // Reveal the setting in Windows power options (Attributes 2 = visible).
     let revealed = reveal_power_setting(
         USB_SUBGROUP,
@@ -1111,6 +1117,9 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 //    Windows never puts USB 3 links into U1/U2 low-power states.
 #[tauri::command]
 async fn disable_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     // Reveal the setting in Windows power options (Attributes 2 = visible).
     let revealed = reveal_power_setting(
         USB_SUBGROUP,

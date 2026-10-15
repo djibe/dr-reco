@@ -197,6 +197,9 @@ export function renderAmelipro(container, navigate) {
           usbFailed.push(s)
           setCheck(card, 'warning', '⚠️', s.label,
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(card, 'warning', '⚠️', s.label,
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else if (r.is_ok) {
           setCheck(card, 'success', '✅', s.label,
             r.detail, { text: s.badge, color: 'success' })
