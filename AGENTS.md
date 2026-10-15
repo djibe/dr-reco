@@ -26,7 +26,7 @@ NEVER trigger any CI/CD pipeline automatically.
 |----------|-------------------------------------------------|
 | Frontend | Vanilla JS (ES modules, **no framework**), Vite 8, custom CSS (`src/style.css`) |
 | Backend  | Rust (edition 2024), Tauri 2, `winreg`, `tauri-plugin-shell/hwinfo/notification` |
-| Target   | Windows 10/11 (diagnostics only make sense on Windows) |
+| Target   | Windows 11 (diagnostics only make sense on Windows) |
 
 Prerequisites: **Node `>=22 <25`**, **Rust ≥ 1.93** toolchain (`rustc`, `cargo`),
 Tauri CLI (via `npm run tauri`). The backend can only be tested on Windows;
@@ -144,8 +144,7 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 
 - **Mangled accents**: known issue (see `todo.md`). Never parse raw output of
   Windows binaries: always go through `powershell_native()`.
-- **Admin rights**: many commands fail without elevation — return
-  `unavailable`/`err` with an explicit message, never panic.
+- **Admin rights**: application is launched with Administrator privileges
 - **Windows-only**: `Get-CimInstance`, `reagentc`, `HKLM` keys… do not work
   elsewhere. Do not "fix" things by breaking Windows compatibility.
 - **Hardcoded versions**: Cryptolib min `5.2.6`, `SrvSvCnam 5.10.04`, browser

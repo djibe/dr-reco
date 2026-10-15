@@ -102,7 +102,7 @@ export function renderWindows(container, navigate) {
         versionError = !ok
         setCheck(vItem, ok ? 'success' : 'warning', ok ? '✅' : '⚠️',
           'Version de Windows',
-          ok ? `${osInfo.name} (build ${build}) — Version conforme.`
+          ok ? `${osInfo.name} (build ${build}) — Version conforme (Windows 11 26H2).`
              : `${osInfo.name} (build ${build}) — Windows 11 26H2 est requis. Mettre à jour via Windows Update (ou forcer avec l’outil FlyOOBE).`,
           ok ? { text: 'Conforme', color: 'success' } : { text: 'Mise à jour requise', color: 'warning' })
       } catch (e) {
