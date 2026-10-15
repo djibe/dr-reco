@@ -35,3 +35,11 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
   (éviter les déconnexions du lecteur CPS)
 
 <img width="922" height="732" alt="image" src="https://github.com/user-attachments/assets/285359b3-67e6-40b6-ae9c-8e6f7a1812a8">
+
+## Développer
+
+- Installer Git, NPM (ex. [NVM Windows](https://nvm-windows.com/)), [Microsoft C++ Build Tools](https://aka.ms/vs/stable/vs_BuildTools.exe) et [Rust](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe)
+- `git clone https://github.com/djibe/dr-reco.git`
+- `cd dr-reco`
+- `npm install`
+- Build: `npm run tauri:build`
