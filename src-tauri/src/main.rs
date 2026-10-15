@@ -929,6 +929,20 @@ Write-Output $result
 }
 
 // ─── USB settings (WinHance power docs order) ─────────────────────────────────
+// Unhide helper for settings hidden by default in Windows power options
+// (Attributes=1). Mirrors Winhance EnablementRegistrySetting (0 = visible).
+fn unhide_power_setting(sub: &str, setting: &str) -> bool {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let path = format!(
+        "SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\{}\\{}",
+        sub, setting
+    );
+    match hklm.open_subkey_with_flags(&path, KEY_SET_VALUE) {
+        Ok(key) => key.set_value("Attributes", &0u32).is_ok(),
+        Err(_) => false,
+    }
+}
+
 // 1. USB Hub Selective Suspend Timeout (usb-hub-selective-suspend-timeout):
 //    idle delay in ms before Windows powers down USB hubs. Subgroup
 //    2a737441-1930-4402-8d77-b2bebba308a3, setting
@@ -976,7 +990,7 @@ Write-Output "ac=$ac dc=$dc"
                     detail: "Le délai de mise en veille des hubs USB n'est pas disponible sur ce plan d'alimentation.".into(),
                     not_found: true, ps_unavailable: false });
             }
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let off = |v: i64| v <= 0;
             if off(ac) && off(dc) {
                 Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) — Les hubs USB restent alimentés en permanence."))
@@ -997,6 +1011,12 @@ Write-Output "ac=$ac dc=$dc"
 
 #[tauri::command]
 async fn disable_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    // Unhide the setting in Windows power options (Attributes 0 = visible).
+    // Best effort: powercfg below remains the source of truth.
+    unhide_power_setting(
+        "2a737441-1930-4402-8d77-b2bebba308a3",
+        "0853a681-27c8-4100-a2fd-82013e970683",
+    );
     let script = r#"
 $sub = "2a737441-1930-4402-8d77-b2bebba308a3"
 $set = "0853a681-27c8-4100-a2fd-82013e970683"
@@ -1039,7 +1059,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let activated = parse_num("activated=");
             let ac = parse_num("ac=");
             let dc = parse_num("dc=");
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let verified_off = ac == 0 && dc <= 0;
             if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
                 Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) avec succès. Les hubs USB resteront alimentés en permanence."))
@@ -1098,7 +1118,7 @@ Write-Output "ac=$ac dc=$dc"
                     not_found: true, ps_unavailable: false });
             }
             // Any non-zero known value means suspend is active on that source.
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let ac_on = ac > 0;
             let dc_on = dc > 0;
             if !ac_on && !dc_on {
@@ -1163,7 +1183,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let activated = parse_num("activated=");
             let ac = parse_num("ac=");
             let dc = parse_num("dc=");
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let verified_off = ac == 0 && dc <= 0;
             if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
                 Ok(CheckResult::ok("Mise en veille sélective USB désactivée avec succès. Les périphériques USB resteront alimentés en permanence."))
@@ -1231,7 +1251,7 @@ Write-Output "ac=$ac dc=$dc"
                 _ if v < 0 => "non définie",
                 _ => "activée",
             };
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let off = |v: i64| v <= 0;
             if off(ac) && off(dc) {
                 Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) — Les périphériques USB 3 restent alimentés en permanence."))
@@ -1252,6 +1272,12 @@ Write-Output "ac=$ac dc=$dc"
 
 #[tauri::command]
 async fn disable_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    // Unhide the setting in Windows power options (Attributes 0 = visible).
+    // Best effort: powercfg below remains the source of truth.
+    unhide_power_setting(
+        "2a737441-1930-4402-8d77-b2bebba308a3",
+        "d4e98f31-5ffe-4ce1-be31-1b38b384c009",
+    );
     let script = r#"
 $sub = "2a737441-1930-4402-8d77-b2bebba308a3"
 $set = "d4e98f31-5ffe-4ce1-be31-1b38b384c009"
@@ -1294,7 +1320,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let activated = parse_num("activated=");
             let ac = parse_num("ac=");
             let dc = parse_num("dc=");
-            // Desktops expose no battery (DC) value: AC alone decides.
+            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
             let verified_off = ac == 0 && dc <= 0;
             if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
                 Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) avec succès. Les périphériques USB 3 resteront alimentés en permanence."))
