@@ -929,92 +929,34 @@ Write-Output $result
 }
 
 // ─── USB settings (WinHance power docs order) ─────────────────────────────────
-// Unhide helper for settings hidden by default in Windows power options
-// (Attributes=1). Mirrors Winhance EnablementRegistrySetting (0 = visible).
-fn unhide_power_setting(sub: &str, setting: &str) -> bool {
+// Reveal helper for settings hidden by default in Windows power options:
+// Attributes 2 makes the setting visible in the power plan UI.
+const USB_SUBGROUP: &str = "2a737441-1930-4402-8d77-b2bebba308a3";
+
+fn reveal_power_setting(sub: &str, setting: &str) -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let path = format!(
         "SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\{}\\{}",
         sub, setting
     );
-    match hklm.open_subkey_with_flags(&path, KEY_SET_VALUE) {
-        Ok(key) => key.set_value("Attributes", &0u32).is_ok(),
-        Err(_) => false,
-    }
+    let key = match hklm.open_subkey_with_flags(&path, KEY_SET_VALUE) {
+        Ok(key) => key,
+        Err(_) => match hklm.create_subkey(&path) {
+            Ok((key, _)) => key,
+            Err(_) => return false,
+        },
+    };
+    key.set_value("Attributes", &2u32).is_ok()
 }
 
 // 1. USB Hub Selective Suspend Timeout (usb-hub-selective-suspend-timeout):
-//    idle delay in ms before Windows powers down USB hubs. Subgroup
-//    2a737441-1930-4402-8d77-b2bebba308a3, setting
-//    0853a681-27c8-4100-a2fd-82013e970683. WinHance recommends AC 0 / DC 1000;
-//    Dr Reco targets 0 on AC and DC so card readers are never suspended.
-// Reads use powercfg /GETACVALUEINDEX + /GETDCVALUEINDEX (locale-independent)
-// instead of parsing the localized /QUERY output.
-#[tauri::command]
-async fn check_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
-    let script = r#"
-$sub = "2a737441-1930-4402-8d77-b2bebba308a3"
-$set = "0853a681-27c8-4100-a2fd-82013e970683"
-function Get-TimeoutMs($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-TimeoutMs $false
-$dc = Get-TimeoutMs $true
-Write-Output "ac=$ac dc=$dc"
-"#;
-    match powershell(&app, script).await {
-        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lire le délai des hubs USB — {}", e))),
-        PsResult::Ok(output, _) => {
-            let line = output
-                .lines()
-                .map(|l| l.trim())
-                .find(|l| l.contains("ac="))
-                .unwrap_or("")
-                .to_string();
-            let parse_ms = |prefix: &str| -> i64 {
-                line.split_whitespace()
-                    .find(|p| p.starts_with(prefix))
-                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
-                    .unwrap_or(-1)
-            };
-            let ac = parse_ms("ac=");
-            let dc = parse_ms("dc=");
-            if ac < 0 && dc < 0 {
-                return Ok(CheckResult { is_ok: true,
-                    detail: "Le délai de mise en veille des hubs USB n'est pas disponible sur ce plan d'alimentation.".into(),
-                    not_found: true, ps_unavailable: false });
-            }
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let off = |v: i64| v <= 0;
-            if off(ac) && off(dc) {
-                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) — Les hubs USB restent alimentés en permanence."))
-            } else if dc < 0 {
-                Ok(CheckResult::err(format!(
-                    "Délai de mise en veille des hubs USB actif (secteur : {} ms) — Windows peut couper l'alimentation des hubs USB au repos, ce qui peut provoquer des déconnexions du lecteur de carte.",
-                    ac
-                )))
-            } else {
-                Ok(CheckResult::err(format!(
-                    "Délai de mise en veille des hubs USB actif (secteur : {} ms, batterie : {} ms) — Windows peut couper l'alimentation des hubs USB au repos, ce qui peut provoquer des déconnexions du lecteur de carte.",
-                    ac, dc
-                )))
-            }
-        }
-    }
-}
-
+//    idle delay in ms before Windows powers down USB hubs. 0 disables it so
+//    card readers are never suspended.
 #[tauri::command]
 async fn disable_usb_hub_timeout(app: tauri::AppHandle) -> Result<CheckResult, String> {
-    // Unhide the setting in Windows power options (Attributes 0 = visible).
-    // Best effort: powercfg below remains the source of truth.
-    unhide_power_setting(
-        "2a737441-1930-4402-8d77-b2bebba308a3",
+    // Reveal the setting in Windows power options (Attributes 2 = visible).
+    let revealed = reveal_power_setting(
+        USB_SUBGROUP,
         "0853a681-27c8-4100-a2fd-82013e970683",
     );
     let script = r#"
@@ -1026,18 +968,7 @@ powercfg /SETDCVALUEINDEX SCHEME_CURRENT $sub $set 0 2>&1
 $dcSet = $LASTEXITCODE
 powercfg /SETACTIVE SCHEME_CURRENT 2>&1
 $activated = $LASTEXITCODE
-function Get-TimeoutMs($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-TimeoutMs $false
-$dc = Get-TimeoutMs $true
-Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
+Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 "#;
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de modifier le plan d'alimentation — {}", e))),
@@ -1057,90 +988,24 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let ac_set = parse_num("acSet=");
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
-            let ac = parse_num("ac=");
-            let dc = parse_num("dc=");
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let verified_off = ac == 0 && dc <= 0;
-            if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
-                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms) avec succès. Les hubs USB resteront alimentés en permanence."))
-            } else if verified_off {
-                Ok(CheckResult::err(format!("La désactivation semble appliquée, mais l'activation du plan a retourné les codes (ac={}, dc={}, activation={}). Relancez l'analyse pour vérifier.", ac_set, dc_set, activated)))
+            if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
+                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms). Les hubs USB resteront alimentés en permanence."))
             } else {
-                Ok(CheckResult::err(format!("La désactivation a échoué (écriture secteur/batterie : {}/{}, activation : {}, valeurs lues : {}/{}). Des droits administrateur sont peut-être nécessaires.", ac_set, dc_set, activated, ac, dc)))
+                Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
         }
     }
 }
 
 // 2. USB selective suspend setting (usb-selective-suspend): allows Windows to
-//    power down individual USB ports when idle. 0 = Disabled, 1 = Enabled.
-//    Same USB subgroup, setting 48e6b7a6-50f5-4782-a5d4-53bb8f07e226.
-//    WinHance recommends AC 0 (Disabled) / DC 1 (Enabled); Dr Reco targets 0
-//    on AC and DC so card readers stay powered at all times.
-#[tauri::command]
-async fn check_usb_suspend(app: tauri::AppHandle) -> Result<CheckResult, String> {
-    let script = r#"
-$sub = "2a737441-1930-4402-8d77-b2bebba308a3"
-$set = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226"
-function Get-SuspendValue($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-SuspendValue $false
-$dc = Get-SuspendValue $true
-Write-Output "ac=$ac dc=$dc"
-"#;
-    match powershell(&app, script).await {
-        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lire la configuration USB — {}", e))),
-        PsResult::Ok(output, _) => {
-            let line = output
-                .lines()
-                .map(|l| l.trim())
-                .find(|l| l.contains("ac="))
-                .unwrap_or("")
-                .to_string();
-            let parse_level = |prefix: &str| -> i64 {
-                line.split_whitespace()
-                    .find(|p| p.starts_with(prefix))
-                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
-                    .unwrap_or(-1)
-            };
-            let ac = parse_level("ac=");
-            let dc = parse_level("dc=");
-            if ac < 0 && dc < 0 {
-                return Ok(CheckResult { is_ok: true,
-                    detail: "La mise en veille sélective USB n'est pas disponible sur ce plan d'alimentation.".into(),
-                    not_found: true, ps_unavailable: false });
-            }
-            // Any non-zero known value means suspend is active on that source.
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let ac_on = ac > 0;
-            let dc_on = dc > 0;
-            if !ac_on && !dc_on {
-                Ok(CheckResult::ok("Mise en veille sélective USB désactivée — Les périphériques USB restent alimentés en permanence."))
-            } else {
-                let which = match (ac_on, dc_on) {
-                    (true,  true)  => "secteur et batterie",
-                    (true,  false) => "secteur uniquement",
-                    (false, true)  => "batterie uniquement",
-                    _              => "",
-                };
-                Ok(CheckResult::err(format!(
-                    "Mise en veille sélective USB activée ({}) — Windows peut couper l'alimentation des périphériques USB, ce qui peut provoquer des déconnexions de lecteurs de carte.",
-                    which
-                )))
-            }
-        }
-    }
-}
-
+//    power down individual USB ports when idle. 0 = Disabled.
 #[tauri::command]
 async fn disable_usb_suspend(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    // Reveal the setting in Windows power options (Attributes 2 = visible).
+    let revealed = reveal_power_setting(
+        USB_SUBGROUP,
+        "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+    );
     let script = r#"
 $sub = "2a737441-1930-4402-8d77-b2bebba308a3"
 $set = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226"
@@ -1150,18 +1015,7 @@ powercfg /SETDCVALUEINDEX SCHEME_CURRENT $sub $set 0 2>&1
 $dcSet = $LASTEXITCODE
 powercfg /SETACTIVE SCHEME_CURRENT 2>&1
 $activated = $LASTEXITCODE
-function Get-SuspendValue($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-SuspendValue $false
-$dc = Get-SuspendValue $true
-Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
+Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 "#;
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de modifier le plan d'alimentation — {}", e))),
@@ -1181,101 +1035,22 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let ac_set = parse_num("acSet=");
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
-            let ac = parse_num("ac=");
-            let dc = parse_num("dc=");
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let verified_off = ac == 0 && dc <= 0;
-            if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
-                Ok(CheckResult::ok("Mise en veille sélective USB désactivée avec succès. Les périphériques USB resteront alimentés en permanence."))
-            } else if verified_off {
-                Ok(CheckResult::err(format!("La désactivation semble appliquée, mais l'activation du plan a retourné les codes (ac={}, dc={}, activation={}). Relancez l'analyse pour vérifier.", ac_set, dc_set, activated)))
+            if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
+                Ok(CheckResult::ok("Mise en veille sélective USB désactivée. Les périphériques USB resteront alimentés en permanence."))
             } else {
-                Ok(CheckResult::err(format!("La désactivation a échoué (écriture secteur/batterie : {}/{}, activation : {}, valeurs lues : {}/{}). Des droits administrateur sont peut-être nécessaires.", ac_set, dc_set, activated, ac, dc)))
+                Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
         }
     }
 }
 
-// 3. USB 3 Link Power Management (usb3-link-power-management): controls how
-//    aggressively USB 3 ports enter low-power states when idle. Prevents Windows
-//    from putting USB 3 links into U1/U2 low-power states, which can disconnect
-//    CPS card readers. 0 = Off, 1 = Minimum, 2 = Moderate, 3 = Maximum power
-//    savings. Same USB subgroup, setting d4e98f31-5ffe-4ce1-be31-1b38b384c009.
-//    WinHance recommends AC 0 (Off) / DC 2 (Moderate); Dr Reco targets Off (0)
-//    on AC and DC.
-#[tauri::command]
-async fn check_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
-    let script = r#"
-$sub = "2a737441-1930-4402-8d77-b2bebba308a3"
-$set = "d4e98f31-5ffe-4ce1-be31-1b38b384c009"
-function Get-LpmValue($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-LpmValue $false
-$dc = Get-LpmValue $true
-Write-Output "ac=$ac dc=$dc"
-"#;
-    match powershell(&app, script).await {
-        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de lire la configuration USB 3 — {}", e))),
-        PsResult::Ok(output, _) => {
-            let line = output
-                .lines()
-                .map(|l| l.trim())
-                .find(|l| l.contains("ac="))
-                .unwrap_or("")
-                .to_string();
-            let parse_level = |prefix: &str| -> i64 {
-                line.split_whitespace()
-                    .find(|p| p.starts_with(prefix))
-                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
-                    .unwrap_or(-1)
-            };
-            let ac = parse_level("ac=");
-            let dc = parse_level("dc=");
-            if ac < 0 && dc < 0 {
-                return Ok(CheckResult { is_ok: true,
-                    detail: "La gestion de l'alimentation de la liaison USB 3 n'est pas disponible sur ce plan d'alimentation.".into(),
-                    not_found: true, ps_unavailable: false });
-            }
-            let level_label = |v: i64| match v {
-                0 => "désactivée (Off)",
-                1 => "économies minimales",
-                2 => "économies modérées",
-                3 => "économies maximales",
-                _ if v < 0 => "non définie",
-                _ => "activée",
-            };
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let off = |v: i64| v <= 0;
-            if off(ac) && off(dc) {
-                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) — Les périphériques USB 3 restent alimentés en permanence."))
-            } else if dc < 0 {
-                Ok(CheckResult::err(format!(
-                    "Gestion de l'alimentation de la liaison USB 3 activée (secteur : {}) — Windows peut mettre les liaisons USB 3 en veille (états U1/U2), ce qui peut provoquer des déconnexions du lecteur de carte.",
-                    level_label(ac)
-                )))
-            } else {
-                Ok(CheckResult::err(format!(
-                    "Gestion de l'alimentation de la liaison USB 3 activée (secteur : {}, batterie : {}) — Windows peut mettre les liaisons USB 3 en veille (états U1/U2), ce qui peut provoquer des déconnexions du lecteur de carte.",
-                    level_label(ac), level_label(dc)
-                )))
-            }
-        }
-    }
-}
-
+// 3. USB 3 Link Power Management (usb3-link-power-management): 0 = Off, so
+//    Windows never puts USB 3 links into U1/U2 low-power states.
 #[tauri::command]
 async fn disable_usb3_lpm(app: tauri::AppHandle) -> Result<CheckResult, String> {
-    // Unhide the setting in Windows power options (Attributes 0 = visible).
-    // Best effort: powercfg below remains the source of truth.
-    unhide_power_setting(
-        "2a737441-1930-4402-8d77-b2bebba308a3",
+    // Reveal the setting in Windows power options (Attributes 2 = visible).
+    let revealed = reveal_power_setting(
+        USB_SUBGROUP,
         "d4e98f31-5ffe-4ce1-be31-1b38b384c009",
     );
     let script = r#"
@@ -1287,18 +1062,7 @@ powercfg /SETDCVALUEINDEX SCHEME_CURRENT $sub $set 0 2>&1
 $dcSet = $LASTEXITCODE
 powercfg /SETACTIVE SCHEME_CURRENT 2>&1
 $activated = $LASTEXITCODE
-function Get-LpmValue($get_dc) {
-    $cmd = "GETACVALUEINDEX"
-    if ($get_dc) { $cmd = "GETDCVALUEINDEX" }
-    $out = powercfg /$cmd SCHEME_CURRENT $sub $set 2>&1
-    if ($LASTEXITCODE -ne 0) { return -1 }
-    $s = ($out | Out-String)
-    if ($s -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
-    return -1
-}
-$ac = Get-LpmValue $false
-$dc = Get-LpmValue $true
-Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
+Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 "#;
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible de modifier le plan d'alimentation — {}", e))),
@@ -1318,16 +1082,10 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated ac=$ac dc=$dc"
             let ac_set = parse_num("acSet=");
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
-            let ac = parse_num("ac=");
-            let dc = parse_num("dc=");
-            // GETDCVALUEINDEX returns a value even on desktops without a battery; -1 means read error or missing setting.
-            let verified_off = ac == 0 && dc <= 0;
-            if ac_set == 0 && dc_set == 0 && activated == 0 && verified_off {
-                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off) avec succès. Les périphériques USB 3 resteront alimentés en permanence."))
-            } else if verified_off {
-                Ok(CheckResult::err(format!("La désactivation semble appliquée, mais l'activation du plan a retourné les codes (ac={}, dc={}, activation={}). Relancez l'analyse pour vérifier.", ac_set, dc_set, activated)))
+            if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
+                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off). Les périphériques USB 3 resteront alimentés en permanence."))
             } else {
-                Ok(CheckResult::err(format!("La désactivation a échoué (écriture secteur/batterie : {}/{}, activation : {}, valeurs lues : {}/{}). Des droits administrateur sont peut-être nécessaires.", ac_set, dc_set, activated, ac, dc)))
+                Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
         }
     }
@@ -1486,11 +1244,8 @@ fn main() {
             check_battery_health,
             check_qmr,
             enable_qmr,
-            check_usb_suspend,
             disable_usb_suspend,
-            check_usb3_lpm,
             disable_usb3_lpm,
-            check_usb_hub_timeout,
             disable_usb_hub_timeout,
             run_dism_cleanup,
             run_compact_os,
