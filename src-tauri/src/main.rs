@@ -766,15 +766,35 @@ fn check_fast_startup() -> Result<CheckResult, String> {
 async fn enable_fast_startup(app: tauri::AppHandle) -> Result<CheckResult, String> {
     let script = r#"
 powercfg /hibernate on
+$hib = $LASTEXITCODE
+powercfg /h /type reduced
+$type = $LASTEXITCODE
 Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 1 -Type DWord -Force
+$reg = $LASTEXITCODE
+Write-Output "hib=$hib type=$type reg=$reg"
 "#;
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible d'activer le démarrage rapide — {}", e))),
-        PsResult::Ok(_, code) => {
-            if code == 0 {
+        PsResult::Ok(output, _) => {
+            let line = output
+                .lines()
+                .map(|l| l.trim())
+                .find(|l| l.contains("hib="))
+                .unwrap_or("")
+                .to_string();
+            let parse_num = |prefix: &str| -> i64 {
+                line.split_whitespace()
+                    .find(|p| p.starts_with(prefix))
+                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
+                    .unwrap_or(-99)
+            };
+            let hib = parse_num("hib=");
+            let reduced = parse_num("type=");
+            let reg = parse_num("reg=");
+            if hib == 0 && reduced == 0 && reg == 0 {
                 Ok(CheckResult::ok("Démarrage rapide activé avec succès. Le changement sera effectif au prochain redémarrage."))
             } else {
-                Ok(CheckResult::err(format!("L'activation du démarrage rapide a échoué (code {}). Des droits administrateur sont peut-être nécessaires.", code)))
+                Ok(CheckResult::err(format!("L'activation du démarrage rapide a échoué (hibernation : {}, fichier réduit : {}, registre : {}). Relancez l'opération.", hib, reduced, reg)))
             }
         }
     }
