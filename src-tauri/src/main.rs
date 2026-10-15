@@ -15,21 +15,43 @@ struct CheckResult {
     not_found: bool,
     #[serde(default)]
     ps_unavailable: bool,
+    #[serde(default)]
+    admin_required: bool,
 }
 
 impl CheckResult {
     fn ok(detail: impl Into<String>) -> Self {
-        Self { is_ok: true, detail: detail.into(), not_found: false, ps_unavailable: false }
+        Self { is_ok: true, detail: detail.into(), not_found: false, ps_unavailable: false, admin_required: false }
     }
     fn err(detail: impl Into<String>) -> Self {
-        Self { is_ok: false, detail: detail.into(), not_found: false, ps_unavailable: false }
+        Self { is_ok: false, detail: detail.into(), not_found: false, ps_unavailable: false, admin_required: false }
     }
     fn unavailable(detail: impl Into<String>) -> Self {
-        Self { is_ok: false, detail: detail.into(), not_found: false, ps_unavailable: true }
+        Self { is_ok: false, detail: detail.into(), not_found: false, ps_unavailable: true, admin_required: false }
     }
     fn missing(detail: impl Into<String>) -> Self {
-        Self { is_ok: false, detail: detail.into(), not_found: true, ps_unavailable: false }
+        Self { is_ok: false, detail: detail.into(), not_found: true, ps_unavailable: false, admin_required: false }
     }
+}
+
+// ─── Administrator rights ───────────────────────────────────────────────────
+// The app manifest requests elevation on launch, but the binary can still run
+// without it (dev mode, manifest bypass). Commands below fail with misleading
+// errors when not elevated, so they check first via the native Win32 API
+// (no extra crate, no PowerShell spawn).
+#[link(name = "shell32")]
+unsafe extern "system" {
+    unsafe fn IsUserAnAdmin() -> i32;
+}
+
+fn is_elevated() -> bool {
+    unsafe { IsUserAnAdmin() != 0 }
+}
+
+fn admin_required() -> CheckResult {
+    CheckResult { is_ok: false,
+        detail: "Cette vérification nécessite des droits administrateur. Relancer Dr Reco en tant qu'administrateur.".into(),
+        not_found: false, ps_unavailable: false, admin_required: true }
 }
 
 // ─── PowerShell helpers ───────────────────────────────────────────────────────
@@ -163,6 +185,9 @@ async fn run_disk_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> 
 // ─── CHKDSK C: ───────────────────────────────────────────────────────────────
 #[tauri::command]
 async fn run_chkdsk(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     let (combined, exit_code) = match powershell_native(&app, "chkdsk C:").await {
         PsResult::SpawnFailed(e) => return Ok(CheckResult::unavailable(
             format!("Impossible d'exécuter CHKDSK — {}. La vérification du disque n'a pas pu être lancée.", e)
@@ -213,7 +238,7 @@ fn check_cryptolib_version() -> Result<CheckResult, String> {
                 } else {
                     format!("Cryptolib CPS version {} installée, mais {} minimum requis. Télécharger la dernière version sur le site de l'ANS.", version, MIN_CRYPTOLIB_VERSION)
                 };
-                Ok(CheckResult { is_ok, detail, not_found: false, ps_unavailable: false })
+                Ok(CheckResult { is_ok, detail, not_found: false, ps_unavailable: false, admin_required: false })
             }
             Err(_) => Ok(CheckResult::missing("Cryptolib CPS trouvé dans le registre mais la valeur 'Version' est manquante.")),
         },
@@ -265,7 +290,7 @@ async fn run_repair(app: tauri::AppHandle, kind: String) -> Result<CheckResult, 
                 let preview: String = output.chars().take(400).collect();
                 format!("{} terminée (code {}). Résultat : {}", label, code, preview.trim())
             };
-            Ok(CheckResult { is_ok, detail, not_found: false, ps_unavailable: false })
+            Ok(CheckResult { is_ok, detail, not_found: false, ps_unavailable: false, admin_required: false })
         }
     }
 }
@@ -392,6 +417,9 @@ try {
 // ─── Windows Recovery (WinRE) ─────────────────────────────────────────────────
 #[tauri::command]
 async fn check_winre(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     match powershell_native(&app, "reagentc /info").await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
             format!("Impossible d'exécuter reagentc — {}", e)
@@ -414,6 +442,9 @@ async fn check_winre(app: tauri::AppHandle) -> Result<CheckResult, String> {
 
 #[tauri::command]
 async fn repair_winre(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     let (_, _) = match powershell_native(&app, "reagentc /disable").await {
         PsResult::SpawnFailed(e) => return Ok(CheckResult::unavailable(
             format!("Impossible de lancer reagentc /disable — {}", e)
@@ -695,6 +726,9 @@ async fn launch_browser_update(app: tauri::AppHandle, browser: String) -> Result
 // System Restore is disabled so the rest of the checks can still proceed.
 #[tauri::command]
 async fn create_restore_point(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     // Checkpoint type 12 = MODIFY_SETTINGS, event type 100 = BEGIN_SYSTEM_CHANGE
     let script = r#"
 $svc = Get-Service -Name SRSVC -ErrorAction SilentlyContinue
@@ -735,11 +769,11 @@ try {
                         "Point de restauration non créé (la protection du système est peut-être désactivée). Résultat : {}",
                         &line[line.find('=').map(|i| i+1).unwrap_or(0)..]
                     ),
-                    not_found: false, ps_unavailable: false })
+                    not_found: false, ps_unavailable: false, admin_required: false })
             } else {
                 Ok(CheckResult { is_ok: false,
                     detail: "Point de restauration non créé (la protection du système est peut-être désactivée sur ce poste).".into(),
-                    not_found: false, ps_unavailable: false })
+                    not_found: false, ps_unavailable: false, admin_required: false })
             }
         }
     }
@@ -764,6 +798,9 @@ fn check_fast_startup() -> Result<CheckResult, String> {
 
 #[tauri::command]
 async fn enable_fast_startup(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     let script = r#"
 powercfg /hibernate on
 $hib = $LASTEXITCODE
@@ -897,6 +934,9 @@ try {
 // ─── Quick Machine Recovery (QMR) ────────────────────────────────────────────
 #[tauri::command]
 async fn check_qmr(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     match powershell_native(&app, "reagentc /getrecoverysettings").await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(format!("Impossible d'exécuter reagentc — {}", e))),
         PsResult::Ok(output, code) => {
@@ -905,7 +945,7 @@ async fn check_qmr(app: tauri::AppHandle) -> Result<CheckResult, String> {
                 || lower.contains("n'est pas reconnu") || lower.contains("getrecoverysettings")) {
                 return Ok(CheckResult { is_ok: true,
                     detail: "Récupération machine rapide non disponible sur cette version de Windows (requiert Windows 11 24H2 build 26100.4700 ou supérieur).".into(),
-                    not_found: true, ps_unavailable: false });
+                    not_found: true, ps_unavailable: false, admin_required: false });
             }
             let cloud_on = lower.contains(r#"cloudremediation state="1""#);
             let auto_on  = lower.contains(r#"autoremediation state="1""#);
@@ -925,6 +965,9 @@ async fn check_qmr(app: tauri::AppHandle) -> Result<CheckResult, String> {
 
 #[tauri::command]
 async fn enable_qmr(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     let script = r#"
 $xml = "<?xml version='1.0' encoding='utf-8'?><WindowsRE><CloudRemediation state=""1"" /><AutoRemediation state=""1"" totalwaittime=""2400"" waitinterval=""120""/></WindowsRE>"
 $tmp = "$env:TEMP\dr_reco_qmr.xml"
@@ -1114,6 +1157,9 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
 // ─── DISM Component Cleanup ───────────────────────────────────────────────────
 #[tauri::command]
 async fn run_dism_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     match app.shell()
         .command("Dism.exe")
         .args(["/online", "/Cleanup-Image", "/StartComponentCleanup", "/ResetBase"])
@@ -1142,6 +1188,9 @@ async fn run_dism_cleanup(app: tauri::AppHandle) -> Result<CheckResult, String> 
 // ─── CompactOS ────────────────────────────────────────────────────────────────
 #[tauri::command]
 async fn run_compact_os(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
     match app.shell()
         .command("Compact.exe")
         .args(["/CompactOS:always"])

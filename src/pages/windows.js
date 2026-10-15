@@ -79,6 +79,9 @@ export function renderWindows(container, navigate) {
         if (r.ps_unavailable) {
           setCheck(rpItem, 'warning', '⚠️', 'Point de restauration Windows',
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(rpItem, 'warning', '⚠️', 'Point de restauration Windows',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           setCheck(rpItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
             'Point de restauration Windows', r.detail,
@@ -160,6 +163,9 @@ export function renderWindows(container, navigate) {
         if (r.ps_unavailable) {
           setCheck(winreItem, 'warning', '⚠️', 'Windows Recovery (WinRE)',
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(winreItem, 'warning', '⚠️', 'Windows Recovery (WinRE)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           winreError = !r.is_ok
           setCheck(winreItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
@@ -222,6 +228,9 @@ export function renderWindows(container, navigate) {
         if (r.ps_unavailable) {
           setCheck(cItem, 'warning', '⚠️', 'Santé du disque C: (CHKDSK)',
             r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(cItem, 'warning', '⚠️', 'Santé du disque C: (CHKDSK)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           chkdskError = !r.is_ok
           setCheck(cItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '🔧',
@@ -320,6 +329,9 @@ export function renderWindows(container, navigate) {
         } else if (r.ps_unavailable) {
           setCheck(qmrItem, 'warning', '⚠️', 'Récupération machine rapide (QMR)',
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(qmrItem, 'warning', '⚠️', 'Récupération machine rapide (QMR)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           qmrDisabled = !r.is_ok
           setCheck(qmrItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
@@ -341,6 +353,9 @@ export function renderWindows(container, navigate) {
         if (r.ps_unavailable) {
           setCheck(dismItem, 'warning', '⚠️', 'Nettoyage des composants Windows (DISM)',
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(dismItem, 'warning', '⚠️', 'Nettoyage des composants Windows (DISM)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           setCheck(dismItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
             'Nettoyage des composants Windows (DISM)', r.detail,
@@ -361,6 +376,9 @@ export function renderWindows(container, navigate) {
         if (r.ps_unavailable) {
           setCheck(compactItem, 'warning', '⚠️', 'Compression du système (CompactOS)',
             r.detail, { text: 'Indisponible', color: 'warning' })
+        } else if (r.admin_required) {
+          setCheck(compactItem, 'warning', '⚠️', 'Compression du système (CompactOS)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
         } else {
           setCheck(compactItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
             'Compression du système (CompactOS)', r.detail,
