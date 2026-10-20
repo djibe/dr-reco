@@ -1,7 +1,7 @@
 {
   "name": "dr-reco",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Assistant de diagnostic et maintenance informatique pour cabinets médicaux",
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:build": "npm run tauri build",
+    "tauri:build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-win.ps1",
     "tauri:update": "cd ./src-tauri && cargo update"
   },
   "dependencies": {

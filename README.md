@@ -36,8 +36,8 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 
 ## Développer
 
-- Installer Git, NPM (ex. [NVM Windows](https://nvm-windows.com/)), [Microsoft C++ Build Tools](https://aka.ms/vs/stable/vs_BuildTools.exe) et [Rust](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe)
+- Installer Git, NPM (ex. [NVM Windows](https://nvm-windows.com/)), [Microsoft C++ Build Tools](https://aka.ms/vs/stable/vs_BuildTools.exe) et [Rust](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe) (chaîne d'outils **MSVC**)
 - `git clone https://github.com/djibe/dr-reco.git`
 - `cd dr-reco`
 - `npm install`
-- Build: `npm run tauri:build`
+- Build: `npm run tauri:build` (charge l'environnement Visual Studio et produit un exécutable autonome)

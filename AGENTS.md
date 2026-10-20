@@ -28,9 +28,11 @@ NEVER trigger any CI/CD pipeline automatically.
 | Backend  | Rust (edition 2024), Tauri 2, `winreg`, `tauri-plugin-shell/hwinfo/notification` |
 | Target   | Windows 11 (diagnostics only make sense on Windows) |
 
-Prerequisites: **Node `>=22 <25`**, **Rust ≥ 1.93** toolchain (`rustc`, `cargo`),
-Tauri CLI (via `npm run tauri`). The backend can only be tested on Windows;
-on Linux/macOS, only the Vite frontend is verifiable.
+Prerequisites: **Node `>=22 <25`**, **Rust ≥ 1.93** with the
+**`stable-x86_64-pc-windows-msvc`** toolchain (pinned in `rust-toolchain.toml` —
+do not build with GNU, see §9), Visual Studio C++ Build Tools, Tauri CLI (via
+`npm run tauri`). The backend can only be tested on Windows; on Linux/macOS,
+only the Vite frontend is verifiable.
 
 ## 3. Commands
 
@@ -39,7 +41,7 @@ npm run dev            # Frontend dev only (http://localhost:1420)
 npm run build          # Build frontend -> dist/
 npm run preview        # Preview the frontend build
 npm run tauri          # Tauri CLI (e.g. npm run tauri dev)
-npm run tauri:build    # Full installer / .exe build
+npm run tauri:build # Full installer / self-contained .exe build (loads MSVC env)
 npm run tauri:update   # cargo update inside src-tauri/
 npm run generate:icons # Regenerate icons from public/favicon.svg
 ```
@@ -117,7 +119,7 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 ## 7. Versions & release
 
 - **Keep the 3 files in sync** on every release: `package.json`,
-  `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (currently `0.7.0`).
+  `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (currently `0.7.1`).
 - Windows metadata (name, copyright, `CompanyName`) lives in
   `[package.metadata.tauri-winres]` in `Cargo.toml`.
 - Minimal permissions in `src-tauri/capabilities/default.json`: only add a
@@ -147,6 +149,13 @@ Typical flow: JS page → `invoke('<command>')` (`@tauri-apps/api/core`)
 - **Admin rights**: application is launched with Administrator privileges
 - **Windows-only**: `Get-CimInstance`, `reagentc`, `HKLM` keys… do not work
   elsewhere. Do not "fix" things by breaking Windows compatibility.
+- **Never build with the GNU toolchain**: `webview2-com-sys` links
+  `WebView2Loader.dll` dynamically on non-MSVC targets, so the produced
+  `dr-reco.exe` only starts when that DLL sits next to it (Windows error:
+  « WebView2Loader.dll est introuvable »). The MSVC target links
+  `WebView2LoaderStatic.lib` instead and yields a self-contained executable.
+  The toolchain is pinned in `rust-toolchain.toml`; build with
+  `npm run tauri:build:win` (loads the Visual Studio environment).
 - **Hardcoded versions**: Cryptolib min `5.2.6`, `SrvSvCnam 5.10.04`, browser
   majors (Chrome 155 / Firefox 157 / Edge 155) — update periodically, flag any
   stale value instead of letting it rot.

@@ -1,0 +1,5 @@
+# Dr Reco is Windows-only: always build with the MSVC toolchain.
+# The GNU toolchain links WebView2Loader.dll dynamically, which breaks the
+# standalone executable (Windows fails with "WebView2Loader.dll is missing").
+[toolchain]
+channel = "stable-x86_64-pc-windows-msvc"
