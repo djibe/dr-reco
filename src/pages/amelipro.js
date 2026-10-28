@@ -38,6 +38,8 @@ export function renderAmelipro(container, navigate) {
     let browserOutdated        = false
     let browserSlugForUpdate   = null
     let cnamOutdated           = false
+    let bluetoothAvailable     = false
+    let bluetoothDisabled      = false
 
     // ── Cryptolib CPS ─────────────────────────────────────────────────────────
     const item = addCheck(checksList, 'Cryptolib CPS', 'Lecture du registre Windows…')
@@ -172,6 +174,32 @@ export function renderAmelipro(container, navigate) {
       }
     }
 
+    // ── Bluetooth (Quick Share) ───────────────────────────────────────────────
+    const btItem = addCheck(checksList, 'Bluetooth (Quick Share)', 'Recherche d’un adaptateur Bluetooth…')
+    try {
+      const r = await invoke('check_bluetooth_adapter')
+      if (r.ps_unavailable) {
+        setCheck(btItem, 'warning', '⚠️', 'Bluetooth (Quick Share)',
+          r.detail, { text: 'Indisponible', color: 'warning' })
+      } else if (r.not_found) {
+        setCheck(btItem, 'info', 'ℹ️', 'Bluetooth (Quick Share)',
+          r.detail, { text: 'Non détecté', color: 'subtle' })
+      } else if (r.is_ok) {
+        bluetoothAvailable = true
+        setCheck(btItem, 'success', '✅', 'Bluetooth (Quick Share)',
+          r.detail, { text: 'Disponible', color: 'success' })
+      } else {
+        bluetoothAvailable = true
+        bluetoothDisabled = true
+        setCheck(btItem, 'warning', '⚠️', 'Bluetooth (Quick Share)',
+          r.detail, { text: 'Désactivé', color: 'warning' })
+      }
+    } catch (e) {
+      setCheck(btItem, 'warning', '⚠️', 'Bluetooth (Quick Share)',
+        `La détection n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
     // ── USB : les 3 réglages d'alimentation sont appliqués automatiquement ─────
     // (séquentiellement : chaque commande backend réactive le plan d'alimentation)
     const usbSettings = [
@@ -233,6 +261,7 @@ export function renderAmelipro(container, navigate) {
     if (browserOutdated && browserSlugForUpdate) addBrowserUpdateBlock(footer, browserSlugForUpdate)
     for (const s of usbFailed) addUsbRetryBlock(footer, s)
     if (scardNotAuto)                          addScardAutostartBlock(footer)
+    if (bluetoothAvailable)                    addQuickShareBlock(footer, bluetoothDisabled)
 
     const homeBtn = document.createElement('button')
     homeBtn.className = 'btn-dr-secondary mt-3'
@@ -299,9 +328,10 @@ function makeRepairBlock(area, { icon, label, cmd }, prepend = false) {
 
 const CRYPTOLIB_URL = 'https://esante.gouv.fr/sites/default/files/media/document/CryptolibCPS-5.2.6_x64.msi'
 const CNAM_URL      = 'https://espacepro.ameli.fr/inscription/#/aide#blocs-2'
+const QUICK_SHARE_URL = 'https://www.android.com/intl/fr_fr/quick-share/with-windows-pc/'
 
-function addDownloadBlock(area, { icon, label, cmd, url, btnLabel, successMsg }) {
-  const block = makeRepairBlock(area, { icon, label, cmd }, true)
+function addDownloadBlock(area, { icon, label, cmd, url, btnLabel, successMsg }, prepend = true) {
+  const block = makeRepairBlock(area, { icon, label, cmd }, prepend)
   const btn    = block.querySelector('.repair-btn')
   const result = block.querySelector('.dr-repair-result')
   btn.innerHTML = btnLabel
@@ -321,6 +351,21 @@ function addDownloadBlock(area, { icon, label, cmd, url, btnLabel, successMsg })
       btn.innerHTML = btnLabel
     }
   })
+}
+
+// ── Quick Share suggestion block ─────────────────────────────────────────────
+
+function addQuickShareBlock(area, bluetoothDisabled = false) {
+  addDownloadBlock(area, {
+    icon: '📱',
+    label: 'Échanger des documents avec un patient (Quick Share)',
+    cmd: bluetoothDisabled
+      ? 'Activer le Bluetooth dans les paramètres Windows, puis installer Quick Share'
+      : 'android.com — Application Quick Share pour Windows',
+    url: QUICK_SHARE_URL,
+    btnLabel: '⬇️ Obtenir Quick Share',
+    successMsg: 'La page de téléchargement de Quick Share a été ouverte dans le navigateur. Installer l’application sur ce PC, puis la connecter au smartphone Android du patient.'
+  }, false)
 }
 
 // ── Extension download block ──────────────────────────────────────────────────

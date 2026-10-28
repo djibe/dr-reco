@@ -260,6 +260,7 @@ html, body {
 .dr-check.status-success { background: var(--dr-success-bg); }
 .dr-check.status-warning { background: var(--dr-warning-bg); }
 .dr-check.status-error   { background: var(--dr-danger-bg);  }
+.dr-check.status-info    { background: var(--dr-surface-low); }
 .dr-check.status-cancelled { background: var(--dr-surface-low); opacity: .55; }
 .dr-check.status-running { background: var(--dr-surface-lowest); }
 

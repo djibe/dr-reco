@@ -533,6 +533,56 @@ async fn check_smartcard_reader(app: tauri::AppHandle) -> Result<CheckResult, St
     }
 }
 
+// ─── Bluetooth adapter detection ────────────────────────────────────────────
+#[tauri::command]
+async fn check_bluetooth_adapter(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let script = r#"Get-PnpDevice -Class Bluetooth -PresentOnly -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Status)|$($_.Problem)|$($_.FriendlyName)" }"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de détecter un adaptateur Bluetooth — {}", e)
+        )),
+        PsResult::Ok(output, _) => {
+            let mut active: Vec<&str> = Vec::new();
+            let mut inactive: Vec<&str> = Vec::new();
+            for line in output.lines() {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                let mut parts = line.splitn(3, '|');
+                let status = parts.next().unwrap_or("").trim();
+                let problem = parts.next().unwrap_or("").trim();
+                let name = parts.next().unwrap_or("").trim();
+                if name.is_empty() {
+                    continue;
+                }
+                // A healthy device reports Status "OK" / Problem "CM_PROB_NONE";
+                // a disabled or faulty one reports "Error" / "CM_PROB_DISABLED"…
+                let healthy = status.eq_ignore_ascii_case("OK")
+                    || problem.eq_ignore_ascii_case("CM_PROB_NONE");
+                if healthy {
+                    active.push(name);
+                } else {
+                    inactive.push(name);
+                }
+            }
+            if !active.is_empty() {
+                Ok(CheckResult::ok(format!(
+                    "Adaptateur Bluetooth détecté : {}. Le partage de documents avec un smartphone Android est possible via Quick Share.",
+                    active.join(", ")
+                )))
+            } else if !inactive.is_empty() {
+                Ok(CheckResult::err(format!(
+                    "Adaptateur Bluetooth détecté mais désactivé ou en erreur : {}. L'activer dans les paramètres Windows, puis utiliser Quick Share.",
+                    inactive.join(", ")
+                )))
+            } else {
+                Ok(CheckResult::missing("Aucun adaptateur Bluetooth détecté sur cet ordinateur."))
+            }
+        }
+    }
+}
+
 // ─── Browser & extension detection ───────────────────────────────────────────
 #[derive(Serialize, Deserialize)]
 struct BrowserResult {
@@ -1311,6 +1361,7 @@ fn main() {
             launch_windows_update,
             check_services_cnam,
             check_smartcard_reader,
+            check_bluetooth_adapter,
             check_scard_service,
             enable_scard_autostart,
             check_browser_and_extension,
