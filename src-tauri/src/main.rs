@@ -702,9 +702,9 @@ struct BrowserVersionResult {
 #[tauri::command]
 fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String> {
     let (browser_label, latest_major) = match browser.as_str() {
-        "chrome"  => ("Google Chrome",   155u32),
-        "firefox" => ("Mozilla Firefox", 157u32),
-        "edge"    => ("Microsoft Edge",  155u32),
+        "chrome"  => ("Google Chrome",   156u32),
+        "firefox" => ("Mozilla Firefox", 159u32),
+        "edge"    => ("Microsoft Edge",  156u32),
         _         => return Err(format!("Navigateur non pris en charge : {}", browser)),
     };
 
