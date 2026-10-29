@@ -257,12 +257,6 @@ html, body {
   box-shadow: var(--dr-shadow-ambient);
   transition: box-shadow var(--dr-transition);
 }
-.dr-check.status-success { background: var(--dr-success-bg); }
-.dr-check.status-warning { background: var(--dr-warning-bg); }
-.dr-check.status-error   { background: var(--dr-danger-bg);  }
-.dr-check.status-info    { background: var(--dr-surface-low); }
-.dr-check.status-cancelled { background: var(--dr-surface-low); opacity: .55; }
-.dr-check.status-running { background: var(--dr-surface-lowest); }
 
 .dr-check-icon { font-size: 1.15rem; min-width: 24px; text-align: center; margin-top: 1px; }
 .dr-check-body { flex: 1; min-width: 0; }
