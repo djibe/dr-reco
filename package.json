@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "tauri:build": "npm run tauri build",
     "tauri:build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-win.ps1",
+    "tauri:build:win:debug": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-win.ps1 -DebugBuild -NoBundle",
     "tauri:update": "cd ./src-tauri && cargo update"
   },
   "dependencies": {

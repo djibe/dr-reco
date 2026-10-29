@@ -17,7 +17,12 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    # Skip NSIS/MSI packaging: builds the executable only (faster local builds).
+    [switch]$NoBundle,
+    # Build with the debug profile: no LTO, no strip (much faster, not for release).
+    [switch]$DebugBuild
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -127,8 +132,12 @@ try {
         throw "link.exe reste introuvable après l'initialisation de l'environnement Visual Studio."
     }
 
+    $tauriArgs = @('build')
+    if ($NoBundle) { $tauriArgs += '--no-bundle' }
+    if ($DebugBuild) { $tauriArgs += '--debug' }
+
     Write-Host "Compilation avec $(rustc --version)"
-    & npm run tauri:build
+    & npm run tauri -- @tauriArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Échec du build Tauri (code $LASTEXITCODE)."
     }

@@ -42,6 +42,7 @@ npm run build          # Build frontend -> dist/
 npm run preview        # Preview the frontend build
 npm run tauri          # Tauri CLI (e.g. npm run tauri dev)
 npm run tauri:build # Full installer / self-contained .exe build (loads MSVC env)
+npm run tauri:build:win:debug # Debug profile, exe only, no LTO (fastest loop, loads MSVC env)
 npm run tauri:update   # cargo update inside src-tauri/
 npm run generate:icons # Regenerate icons from public/favicon.svg
 ```

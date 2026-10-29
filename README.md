@@ -44,3 +44,4 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - `cd dr-reco`
 - `npm install`
 - Build: `npm run tauri:build:win` (installateur et exécutable portable)
+- Build de développement (binaire debug, sans LTO — plus rapide, avec console) : `npm run tauri:build:win:debug` → `src-tauri/target/debug/dr-reco.exe`
