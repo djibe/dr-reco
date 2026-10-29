@@ -62,6 +62,10 @@ export function renderWindows(container, navigate) {
     let winreError         = false
     let fastStartupDisabled = false
     let qmrDisabled        = false
+    let trimIssue          = false
+    let trimDisabled       = false
+    let trimStale          = false
+    let trimTaskIssue      = false
 
     function wasCancelled(item, label) {
       if (!cancelled) return false
@@ -155,7 +159,41 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 4. WinRE ──────────────────────────────────────────────────────────────
+    // ── 4. Optimisation TRIM (SSD) ────────────────────────────────────────────
+    const trimItem = addCheck(checksList, 'Optimisation TRIM (SSD)', 'Lecture de l’état TRIM et de la dernière optimisation…')
+    if (!wasCancelled(trimItem, 'Optimisation TRIM (SSD)')) {
+      try {
+        const r = await invoke('check_trim_optimization')
+        if (r.ps_unavailable) {
+          setCheck(trimItem, 'warning', '⚠️', 'Optimisation TRIM (SSD)',
+            r.detail, { text: 'PowerShell indisponible', color: 'warning' })
+        } else if (r.not_concerned) {
+          setCheck(trimItem, 'info', '➖', 'Optimisation TRIM (SSD)',
+            r.detail, { text: 'Non concerné', color: 'subtle' })
+        } else if (r.admin_required) {
+          setCheck(trimItem, 'warning', '⚠️', 'Optimisation TRIM (SSD)',
+            r.detail, { text: 'Admin requis', color: 'warning' })
+        } else {
+          trimIssue     = !r.is_ok
+          trimDisabled  = r.needs_trim_fix
+          trimStale     = r.needs_optimization
+          trimTaskIssue = r.needs_task_fix
+          const trimBadge = r.is_ok
+                          ? (r.retrim_done ? { text: 'Optimisé', color: 'success' } : { text: 'Actif', color: 'success' })
+                          : r.needs_trim_fix     ? { text: 'Désactivé', color: 'warning' }
+                          : r.needs_optimization ? { text: 'À optimiser', color: 'warning' }
+                          :                        { text: 'Automatisation en échec', color: 'warning' }
+          setCheck(trimItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
+            'Optimisation TRIM (SSD)', r.detail, trimBadge)
+        }
+      } catch (e) {
+        setCheck(trimItem, 'warning', '⚠️', 'Optimisation TRIM (SSD)',
+          `La vérification TRIM n'a pas pu être lancée : ${e}`,
+          { text: 'Indisponible', color: 'warning' })
+      }
+    }
+
+    // ── 5. WinRE ──────────────────────────────────────────────────────────────
     const winreItem = addCheck(checksList, 'Windows Recovery (WinRE)', 'Vérification de l’état de la partition de récupération…')
     if (!wasCancelled(winreItem, 'Windows Recovery (WinRE)')) {
       try {
@@ -179,7 +217,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 5. SFC ────────────────────────────────────────────────────────────────
+    // ── 6. SFC ────────────────────────────────────────────────────────────────
     const sItem = addCheck(checksList, 'Intégrité des fichiers système (SFC)', 'Analyse en cours — peut prendre plusieurs minutes…')
     if (!wasCancelled(sItem, 'Intégrité des fichiers système (SFC)')) {
       try {
@@ -200,7 +238,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 6. Nettoyage du disque ────────────────────────────────────────────────
+    // ── 7. Nettoyage du disque ────────────────────────────────────────────────
     const dcItem = addCheck(checksList, 'Nettoyage du disque C:', 'Suppression des fichiers temporaires…')
     if (!wasCancelled(dcItem, 'Nettoyage du disque C:')) {
       try {
@@ -220,7 +258,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 7. CHKDSK ─────────────────────────────────────────────────────────────
+    // ── 8. CHKDSK ─────────────────────────────────────────────────────────────
     const cItem = addCheck(checksList, 'Santé du disque C: (CHKDSK)', 'Analyse du disque en cours…')
     if (!wasCancelled(cItem, 'Santé du disque C: (CHKDSK)')) {
       try {
@@ -244,7 +282,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 8. Antivirus ──────────────────────────────────────────────────────────
+    // ── 9. Antivirus ──────────────────────────────────────────────────────────
     const avItem = addCheck(checksList, 'Antivirus', 'Interrogation du centre de sécurité Windows…')
     if (!wasCancelled(avItem, 'Antivirus')) {
       try {
@@ -275,7 +313,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 9. Démarrage rapide ───────────────────────────────────────────────────
+    // ── 10. Démarrage rapide ──────────────────────────────────────────────────
     const fsItem = addCheck(checksList, 'Démarrage rapide Windows', 'Lecture du registre…')
     if (!wasCancelled(fsItem, 'Démarrage rapide Windows')) {
       try {
@@ -291,7 +329,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 10. Santé de la batterie (portables uniquement) ───────────────────────
+    // ── 11. Santé de la batterie (portables uniquement) ───────────────────────
     const batItem = addCheck(checksList, 'Santé de la batterie', 'Détection du type de machine…')
     if (!wasCancelled(batItem, 'Santé de la batterie')) {
       try {
@@ -319,7 +357,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 11. Récupération machine rapide (QMR) ─────────────────────────────────
+    // ── 12. Récupération machine rapide (QMR) ─────────────────────────────────
     const qmrItem = addCheck(checksList, 'Récupération machine rapide (QMR)', 'Lecture de la configuration…')
     if (!wasCancelled(qmrItem, 'Récupération machine rapide (QMR)')) {
       try {
@@ -345,7 +383,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 12. Nettoyage des composants DISM ────────────────────────────────────
+    // ── 13. Nettoyage des composants DISM ────────────────────────────────────
     const dismItem = addCheck(checksList, 'Nettoyage des composants Windows (DISM)', 'Dism.exe /StartComponentCleanup /ResetBase — peut prendre plusieurs minutes…')
     if (!wasCancelled(dismItem, 'Nettoyage des composants Windows (DISM)')) {
       try {
@@ -368,7 +406,7 @@ export function renderWindows(container, navigate) {
       }
     }
 
-    // ── 13. Compression du système (CompactOS) ────────────────────────────────
+    // ── 14. Compression du système (CompactOS) ────────────────────────────────
     const compactItem = addCheck(checksList, 'Compression du système (CompactOS)', 'Compact.exe /CompactOS:always — peut prendre plusieurs minutes…')
     if (!wasCancelled(compactItem, 'Compression du système (CompactOS)')) {
       try {
@@ -397,7 +435,7 @@ export function renderWindows(container, navigate) {
     launchBtn.innerHTML = '🔄 Relancer l’analyse'
 
     if (!cancelled) {
-      const issueCount = [versionError, sfcError, chkdskError, avError, winreError, fastStartupDisabled, qmrDisabled].filter(Boolean).length
+      const issueCount = [versionError, sfcError, chkdskError, avError, winreError, fastStartupDisabled, qmrDisabled, trimIssue].filter(Boolean).length
       if (issueCount === 0) {
         notify('Dr Reco — Windows', '✅ Vérification terminée — Aucun problème détecté.')
       } else {
@@ -411,6 +449,9 @@ export function renderWindows(container, navigate) {
       if (winreError)          addWinreRepairBlock(repairArea)
       if (fastStartupDisabled) addFastStartupBlock(repairArea)
       if (qmrDisabled)         addQmrBlock(repairArea)
+      if (trimDisabled)        addTrimFixBlock(repairArea)
+      if (trimStale)           addTrimOptimizeBlock(repairArea)
+      if (trimTaskIssue)       addOptimizeTaskBlock(repairArea)
     }
 
     const homeBtn = document.createElement('button')
@@ -564,5 +605,38 @@ function addQmrBlock(area) {
   wireRepairBtn(block,
     () => invoke('enable_qmr'), {},
     { successLabel: '✅ Récupération machine rapide activée', retryLabel: '☁️ Réessayer' }
+  )
+}
+
+function addTrimFixBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '🧹', label: 'Activer TRIM',
+    cmd: 'fsutil behavior set DisableDeleteNotify 0 → Optimize-Volume -ReTrim'
+  })
+  wireRepairBtn(block,
+    () => invoke('fix_trim'), {},
+    { successLabel: '✅ TRIM activé', retryLabel: '🧹 Réessayer' }
+  )
+}
+
+function addTrimOptimizeBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '🧹', label: 'Optimiser le SSD',
+    cmd: 'Optimize-Volume -DriveLetter C -ReTrim'
+  })
+  wireRepairBtn(block,
+    () => invoke('fix_trim'), {},
+    { successLabel: '✅ SSD optimisé', retryLabel: '🧹 Réessayer' }
+  )
+}
+
+function addOptimizeTaskBlock(area) {
+  const block = makeRepairBlock(area, {
+    icon: '📅', label: 'Réactiver l’optimisation planifiée',
+    cmd: 'Enable-ScheduledTask + Start-ScheduledTask — \\Microsoft\\Windows\\Defrag\\ScheduledDefrag'
+  })
+  wireRepairBtn(block,
+    () => invoke('enable_optimize_task'), {},
+    { successLabel: '✅ Optimisation planifiée réactivée', retryLabel: '📅 Réessayer' }
   )
 }

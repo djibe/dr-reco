@@ -358,57 +358,474 @@ async fn activate_defender(app: tauri::AppHandle) -> Result<CheckResult, String>
     }
 }
 
+// ─── System disk detection ───────────────────────────────────────────────────
+// Shared by the storage type check and the TRIM check: both need the physical
+// disk hosting the C: volume. Get-Partition gives the real disk number, which
+// is then matched against the physical disk (DeviceId equals DiskNumber).
+struct SystemDisk {
+    media_type: String,
+    spindle:    u32,
+    model:      String,
+}
+
+enum MediaKind {
+    Ssd,
+    Scm,
+    Hdd,
+    Unknown,
+}
+
+impl SystemDisk {
+    /// `MediaType` comes back either as a numeric code (3/4/5) or as a name
+    /// ("HDD"/"SSD"/"SCM") depending on the PowerShell build, so accept both.
+    fn media_kind(&self) -> MediaKind {
+        match self.media_type.trim().to_lowercase().as_str() {
+            "3" | "hdd" => MediaKind::Hdd,
+            "4" | "ssd" => MediaKind::Ssd,
+            "5" | "scm" => MediaKind::Scm,
+            _ => MediaKind::Unknown,
+        }
+    }
+
+    fn is_ssd(&self) -> bool {
+        match self.media_kind() {
+            MediaKind::Ssd | MediaKind::Scm => true,
+            MediaKind::Hdd => false,
+            // Unspecified media type: only a spinning disk reports a spindle speed.
+            MediaKind::Unknown => self.spindle == 0,
+        }
+    }
+
+    fn type_label(&self) -> &'static str {
+        match self.media_kind() {
+            MediaKind::Ssd => "SSD",
+            MediaKind::Scm => "SSD (SCM/Optane)",
+            MediaKind::Hdd => "HDD",
+            MediaKind::Unknown => if self.spindle == 0 { "SSD/NVMe" } else { "HDD" },
+        }
+    }
+}
+
+enum DiskProbe {
+    Found(SystemDisk),
+    Unknown,
+    Unavailable(String),
+}
+
+async fn detect_c_disk(app: &tauri::AppHandle) -> DiskProbe {
+    let script = r#"
+try {
+    $diskNum = (Get-Partition -DriveLetter C -ErrorAction Stop).DiskNumber
+    $disk = Get-PhysicalDisk -ErrorAction SilentlyContinue |
+        Where-Object { $_.DeviceId -eq $diskNum } | Select-Object -First 1
+    if ($null -eq $disk) {
+        $d = Get-Disk -Number $diskNum -ErrorAction SilentlyContinue
+        if ($null -eq $d) { Write-Output "none"; exit 0 }
+        Write-Output "$($d.MediaType)|0|$($d.FriendlyName)"
+    } else {
+        Write-Output "$($disk.MediaType)|$($disk.SpindleSpeed)|$($disk.FriendlyName)"
+    }
+} catch {
+    Write-Output "none"
+}
+"#;
+    match powershell(app, script).await {
+        PsResult::SpawnFailed(e) => DiskProbe::Unavailable(e),
+        PsResult::Ok(output, _) => {
+            let line = match output.lines().find(|l| !l.trim().is_empty()) {
+                Some(line) => line.trim(),
+                None => return DiskProbe::Unknown,
+            };
+            if line == "none" {
+                return DiskProbe::Unknown;
+            }
+            let parts: Vec<&str> = line.splitn(3, '|').collect();
+            DiskProbe::Found(SystemDisk {
+                media_type: parts.first().copied().unwrap_or("0").trim().to_string(),
+                spindle:    parts.get(1).copied().unwrap_or("0").trim().parse::<u32>().unwrap_or(0),
+                model:      parts.get(2).copied().unwrap_or("Inconnu").trim().to_string(),
+            })
+        }
+    }
+}
+
 // ─── SSD detection ───────────────────────────────────────────────────────────
 #[tauri::command]
 async fn check_storage_type(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    let disk = match detect_c_disk(&app).await {
+        DiskProbe::Found(disk) => disk,
+        DiskProbe::Unavailable(e) => return Ok(CheckResult::unavailable(
+            format!("Impossible de détecter le type de stockage — {}", e)
+        )),
+        // Same fallback as before: an unidentified disk is treated as an SSD.
+        DiskProbe::Unknown => SystemDisk {
+            media_type: "0".into(),
+            spindle: 0,
+            model: "Inconnu".into(),
+        },
+    };
+
+    let type_label = disk.type_label();
+    if disk.is_ssd() {
+        Ok(CheckResult::ok(format!("Stockage de type {} détecté ({}) — Performances optimales.", type_label, disk.model)))
+    } else {
+        Ok(CheckResult::err(format!("Disque dur très lent en place ({}, {}). Un stockage SSD accélère grandement l'ordinateur.", type_label, disk.model)))
+    }
+}
+
+// ─── TRIM optimization (SSD) ─────────────────────────────────────────────────
+// TRIM tells the SSD which blocks are free. The global switch is exposed by
+// fsutil (DisableDeleteNotify = 0 means TRIM is allowed); the sentence around
+// it is localized, so only the ASCII prefix and the numeric value are parsed.
+const TRIM_MIN_DAYS: i64 = 30;
+// Result of the Windows scheduled optimization task when it is still running.
+const TASK_RESULT_RUNNING: i64 = 267009;
+
+#[derive(Serialize, Deserialize)]
+struct TrimResult {
+    is_ok:              bool,
+    not_concerned:      bool,
+    needs_trim_fix:     bool,
+    needs_optimization: bool,
+    needs_task_fix:     bool,
+    retrim_done:        bool,
+    disk_type:          String,
+    last_optimization:  String,
+    days_since:         i64,
+    task_state:         String,
+    detail:             String,
+    ps_unavailable:     bool,
+    admin_required:     bool,
+}
+
+impl TrimResult {
+    fn base() -> Self {
+        Self {
+            is_ok: true, not_concerned: false,
+            needs_trim_fix: false, needs_optimization: false, needs_task_fix: false,
+            retrim_done: false,
+            disk_type: String::new(), last_optimization: String::new(), days_since: -1,
+            task_state: String::new(), detail: String::new(),
+            ps_unavailable: false, admin_required: false,
+        }
+    }
+    fn not_concerned(detail: impl Into<String>) -> Self {
+        Self { not_concerned: true, detail: detail.into(), ..Self::base() }
+    }
+    fn unavailable(detail: impl Into<String>) -> Self {
+        Self { is_ok: false, ps_unavailable: true, detail: detail.into(), ..Self::base() }
+    }
+}
+
+/// Read `NTFS DisableDeleteNotify = <n>` (0 = TRIM enabled).
+fn parse_trim_flag(output: &str) -> Option<u32> {
+    output
+        .lines()
+        .map(|line| line.trim())
+        .find(|line| line.starts_with("NTFS DisableDeleteNotify"))
+        .and_then(|line| line.split('=').nth(1))
+        .and_then(|value| value.split_whitespace().next())
+        .and_then(|value| value.parse().ok())
+}
+
+struct OptimizationState {
+    days:        i64,
+    last:        String,
+    task_state:  String,
+    task_result: i64,
+}
+
+/// Last optimization date, combining the Windows scheduled task and the
+/// timestamp Dr Reco writes after its own retrim (a manual retrim does not
+/// update the scheduled task history).
+async fn probe_optimization_state(app: &tauri::AppHandle) -> Option<OptimizationState> {
+    let script = r#"
+$own = $null
+$key = "HKCU:\Software\DrReco"
+if (Test-Path $key) {
+    $v = (Get-ItemProperty -Path $key -Name LastTrimDate -ErrorAction SilentlyContinue).LastTrimDate
+    if ($v) { $own = [DateTimeOffset]::FromUnixTimeSeconds([int64]$v).LocalDateTime }
+}
+$info = Get-ScheduledTaskInfo -TaskPath '\Microsoft\Windows\Defrag\' -TaskName 'ScheduledDefrag' -ErrorAction SilentlyContinue
+$task = Get-ScheduledTask -TaskPath '\Microsoft\Windows\Defrag\' -TaskName 'ScheduledDefrag' -ErrorAction SilentlyContinue
+$lastTask = $null
+if ($null -ne $info -and $info.LastRunTime -and $info.LastRunTime.Year -ge 2000) { $lastTask = $info.LastRunTime }
+$candidates = @()
+if ($null -ne $lastTask) { $candidates += $lastTask }
+if ($null -ne $own) { $candidates += $own }
+$last = $null
+if ($candidates.Count -gt 0) { $last = $candidates | Sort-Object -Descending | Select-Object -First 1 }
+$days = -1
+if ($null -ne $last) { $days = [int]((Get-Date) - $last).TotalDays }
+$lastStr = ""
+if ($null -ne $last) { $lastStr = $last.ToString("dd/MM/yyyy", [System.Globalization.CultureInfo]::InvariantCulture) }
+$state = "Missing"
+if ($null -ne $task) { $state = "$($task.State)" }
+$result = -1
+if ($null -ne $info) { $result = [int64]$info.LastTaskResult }
+Write-Output "$days|$lastStr|$state|$result"
+"#;
+    match powershell(app, script).await {
+        PsResult::SpawnFailed(_) => None,
+        PsResult::Ok(output, code) => {
+            if code != 0 {
+                return None;
+            }
+            let line = output.lines().find(|l| !l.trim().is_empty())?.trim();
+            let parts: Vec<&str> = line.splitn(4, '|').collect();
+            if parts.len() < 4 {
+                return None;
+            }
+            Some(OptimizationState {
+                days:        parts[0].trim().parse().unwrap_or(-1),
+                last:        parts[1].trim().to_string(),
+                task_state:  parts[2].trim().to_string(),
+                task_result: parts[3].trim().parse().unwrap_or(-1),
+            })
+        }
+    }
+}
+
+/// Run a real retrim on C: and remember the date in the user's registry hive.
+async fn run_volume_retrim(app: &tauri::AppHandle) -> bool {
     let script = r#"
 try {
-    $partition = Get-Partition -DriveLetter C -ErrorAction Stop
-    $disk = Get-PhysicalDisk | Where-Object {
-        (Get-Disk -Number $_.DeviceId -ErrorAction SilentlyContinue) -ne $null -and
-        (Get-Partition -DiskNumber $_.DeviceId -ErrorAction SilentlyContinue |
-            Where-Object { $_.DriveLetter -eq 'C' }) -ne $null
-    } | Select-Object -First 1
-    if ($null -eq $disk) {
-        $diskNum = $partition.DiskNumber
-        $disk = Get-PhysicalDisk | Where-Object { $_.DeviceId -eq $diskNum } | Select-Object -First 1
-    }
-    if ($null -eq $disk) { Write-Output "unknown|Unknown"; exit 0 }
-    $mt = $disk.MediaType
-    $spindle = $disk.SpindleSpeed
-    $model = $disk.FriendlyName
-    Write-Output "$mt|$spindle|$model"
+    Optimize-Volume -DriveLetter C -ReTrim -ErrorAction Stop | Out-Null
 } catch {
-    Write-Output "error|$_"
+    Write-Output "retrim_error"
+    exit 2
 }
+try {
+    if (-not (Test-Path "HKCU:\Software\DrReco")) {
+        New-Item -Path "HKCU:\Software\DrReco" -Force | Out-Null
+    }
+    New-ItemProperty -Path "HKCU:\Software\DrReco" -Name LastTrimDate `
+        -Value ([int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -PropertyType QWord -Force | Out-Null
+} catch { }
+Write-Output "retrim_ok"
+exit 0
+"#;
+    match powershell(app, script).await {
+        PsResult::SpawnFailed(_) => false,
+        PsResult::Ok(output, code) => code == 0 && output.contains("retrim_ok"),
+    }
+}
+
+fn days_phrase(days: i64) -> String {
+    if days <= 0 {
+        "aujourd’hui".to_string()
+    } else if days == 1 {
+        "hier".to_string()
+    } else {
+        format!("il y a {} jours", days)
+    }
+}
+
+#[tauri::command]
+async fn check_trim_optimization(app: tauri::AppHandle) -> Result<TrimResult, String> {
+    // 1. Physical disk hosting C:
+    let disk = match detect_c_disk(&app).await {
+        DiskProbe::Found(disk) => disk,
+        DiskProbe::Unavailable(e) => return Ok(TrimResult::unavailable(
+            format!("Impossible de vérifier l’optimisation TRIM — {}.", e)
+        )),
+        DiskProbe::Unknown => return Ok(TrimResult::not_concerned(
+            "Type de disque indéterminé : l’optimisation TRIM n’est pas applicable."
+        )),
+    };
+
+    // A mechanical disk never uses TRIM: skip the check entirely.
+    if !disk.is_ssd() {
+        return Ok(TrimResult::not_concerned(format!(
+            "Disque dur mécanique ({}) : l’optimisation TRIM ne concerne que les SSD. Aucune action nécessaire.",
+            disk.model
+        )));
+    }
+
+    // 2. TRIM switch
+    let trim_enabled = match powershell_native(&app, "fsutil behavior query DisableDeleteNotify").await {
+        PsResult::SpawnFailed(e) => return Ok(TrimResult::unavailable(
+            format!("Impossible de lire l’état TRIM — {}.", e)
+        )),
+        PsResult::Ok(output, _) => match parse_trim_flag(&output) {
+            Some(flag) => flag == 0,
+            None => return Ok(TrimResult::not_concerned(
+                "État TRIM indéterminé sur ce système : la vérification n’est pas applicable."
+            )),
+        },
+    };
+
+    // 3. Optimization history
+    let state = match probe_optimization_state(&app).await {
+        Some(state) => state,
+        None => return Ok(TrimResult::unavailable(
+            "Impossible de lire l’historique d’optimisation du disque."
+        )),
+    };
+
+    let mut result = TrimResult::base();
+    // History fields describe the state measured *before* any retrim below.
+    result.disk_type = format!("{} ({})", disk.type_label(), disk.model);
+    result.days_since = state.days;
+    result.last_optimization = state.last.clone();
+    result.task_state = state.task_state.clone();
+
+    // Broken scheduled task: the weekly optimization no longer runs.
+    let task_broken = state.task_state.eq_ignore_ascii_case("Disabled")
+        || state.task_state.eq_ignore_ascii_case("Missing")
+        || (state.task_result != 0 && state.task_result != TASK_RESULT_RUNNING);
+    let task_message = if state.task_state.eq_ignore_ascii_case("Missing") {
+        "La tâche d’optimisation automatique de Windows est introuvable sur ce poste.".to_string()
+    } else if state.task_state.eq_ignore_ascii_case("Disabled") {
+        "La tâche d’optimisation automatique de Windows est désactivée.".to_string()
+    } else {
+        format!("La dernière optimisation planifiée par Windows a échoué (code {}).", state.task_result)
+    };
+
+    // 4. TRIM disabled: report it, never change the switch silently.
+    if !trim_enabled {
+        result.is_ok = false;
+        result.needs_trim_fix = true;
+        result.detail = "TRIM désactivé : Windows ne signale plus au SSD les blocs libres, ce qui l’use plus vite. Cliquer sur « Activer TRIM » pour corriger.".to_string();
+        if task_broken {
+            result.needs_task_fix = true;
+            result.detail = format!("{} {}", result.detail, task_message);
+        }
+        return Ok(result);
+    }
+
+    // 5. Stale history: optimize now (the app runs elevated, see §9 of AGENTS.md).
+    let last_label = if state.last.is_empty() {
+        String::new()
+    } else {
+        format!("{} ({})", state.last, days_phrase(state.days))
+    };
+    let stale = state.days < 0 || state.days > TRIM_MIN_DAYS;
+
+    if stale {
+        if !is_elevated() {
+            result.is_ok = false;
+            result.needs_optimization = true;
+            result.admin_required = true;
+            result.detail = "TRIM actif, mais l’optimisation du SSD nécessite des droits administrateur. Relancer Dr Reco en tant qu’administrateur.".to_string();
+            return Ok(result);
+        }
+        if run_volume_retrim(&app).await {
+            result.retrim_done = true;
+            result.detail = if last_label.is_empty() {
+                "TRIM actif. Les blocs libres du SSD ont été optimisés pendant cette analyse.".to_string()
+            } else {
+                format!("TRIM actif. Les blocs libres du SSD ont été optimisés pendant cette analyse (optimisation précédente : {}).", last_label)
+            };
+        } else {
+            result.is_ok = false;
+            result.needs_optimization = true;
+            result.detail = if last_label.is_empty() {
+                "TRIM actif, mais aucune optimisation récente n’est enregistrée. L’optimisation n’a pas pu être lancée : cliquer sur « Optimiser le SSD » pour réessayer.".to_string()
+            } else {
+                format!("TRIM actif, mais la dernière optimisation remonte à {} (plus de {} jours). L’optimisation n’a pas pu être lancée : cliquer sur « Optimiser le SSD » pour réessayer.", last_label, TRIM_MIN_DAYS)
+            };
+        }
+    } else {
+        result.detail = format!("TRIM actif. Dernière optimisation : {} — rien à faire.", last_label);
+    }
+
+    if task_broken {
+        result.is_ok = false;
+        result.needs_task_fix = true;
+        result.detail = format!("{} {}", result.detail, task_message);
+    }
+
+    Ok(result)
+}
+
+/// Repair action: re-enable TRIM for the whole system and retrim C: now.
+#[tauri::command]
+async fn fix_trim(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
+    let script = r#"
+$flagOk = 0
+try {
+    fsutil behavior set DisableDeleteNotify 0 | Out-Null
+    if ($LASTEXITCODE -eq 0) { $flagOk = 1 }
+} catch { }
+$retrimOk = 0
+try {
+    Optimize-Volume -DriveLetter C -ReTrim -ErrorAction Stop | Out-Null
+    $retrimOk = 1
+} catch { }
+if ($flagOk -eq 1 -and $retrimOk -eq 1) {
+    try {
+        if (-not (Test-Path "HKCU:\Software\DrReco")) {
+            New-Item -Path "HKCU:\Software\DrReco" -Force | Out-Null
+        }
+        New-ItemProperty -Path "HKCU:\Software\DrReco" -Name LastTrimDate `
+            -Value ([int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) -PropertyType QWord -Force | Out-Null
+    } catch { }
+}
+Write-Output "flag=$flagOk retrim=$retrimOk"
 "#;
     match powershell(&app, script).await {
         PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
-            format!("Impossible de détecter le type de stockage — {}", e)
+            format!("Impossible d’optimiser le disque — {}", e)
         )),
         PsResult::Ok(output, _) => {
-            let line = output.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
-            let parts: Vec<&str> = line.splitn(3, '|').collect();
-            let media_type = parts.first().copied().unwrap_or("0").trim();
-            let spindle    = parts.get(1).copied().unwrap_or("0").trim().parse::<u32>().unwrap_or(0);
-            let model      = parts.get(2).copied().unwrap_or("Inconnu").trim();
-
-            let is_ssd = match media_type {
-                "4" | "5" => true,
-                "3"       => false,
-                _         => spindle == 0,
+            let line = output
+                .lines()
+                .map(|l| l.trim())
+                .find(|l| l.contains("flag="))
+                .unwrap_or("")
+                .to_string();
+            let parse_num = |prefix: &str| -> i64 {
+                line.split_whitespace()
+                    .find(|p| p.starts_with(prefix))
+                    .and_then(|p| p.trim_start_matches(prefix).parse::<i64>().ok())
+                    .unwrap_or(-99)
             };
-            let type_label = match media_type {
-                "4" => "SSD",
-                "5" => "SSD (SCM/Optane)",
-                "3" => "HDD",
-                _   => if spindle == 0 { "SSD/NVMe" } else { "HDD" },
-            };
-
-            if is_ssd {
-                Ok(CheckResult::ok(format!("Stockage de type {} détecté ({}) — Performances optimales.", type_label, model)))
+            let flag_ok = parse_num("flag=") == 1;
+            let retrim_ok = parse_num("retrim=") == 1;
+            if flag_ok && retrim_ok {
+                Ok(CheckResult::ok("TRIM activé et blocs libres du SSD optimisés avec succès."))
+            } else if flag_ok {
+                Ok(CheckResult::err("TRIM activé, mais l’optimisation du SSD a échoué. Réessayer ou vérifier le disque."))
             } else {
-                Ok(CheckResult::err(format!("Disque dur très lent en place ({}, {}). Un stockage SSD accélère grandement l'ordinateur.", type_label, model)))
+                Ok(CheckResult::err("Impossible d’activer TRIM. Des droits administrateur sont peut-être nécessaires."))
+            }
+        }
+    }
+}
+
+/// Repair action: re-enable and restart the Windows scheduled optimization task.
+#[tauri::command]
+async fn enable_optimize_task(app: tauri::AppHandle) -> Result<CheckResult, String> {
+    if !is_elevated() {
+        return Ok(admin_required());
+    }
+    let script = r#"
+$path = '\Microsoft\Windows\Defrag\'
+$name = 'ScheduledDefrag'
+$task = Get-ScheduledTask -TaskPath $path -TaskName $name -ErrorAction Stop
+if ($task.State -eq 'Disabled') { Enable-ScheduledTask -InputObject $task | Out-Null }
+Start-ScheduledTask -TaskPath $path -TaskName $name
+Write-Output "task_ok"
+"#;
+    match powershell(&app, script).await {
+        PsResult::SpawnFailed(e) => Ok(CheckResult::unavailable(
+            format!("Impossible de relancer l’optimisation planifiée — {}", e)
+        )),
+        PsResult::Ok(output, code) => {
+            if code == 0 && output.contains("task_ok") {
+                Ok(CheckResult::ok(
+                    "Optimisation planifiée de Windows réactivée et relancée. Le SSD sera optimisé en arrière-plan."
+                ))
+            } else {
+                let preview: String = output.chars().take(300).collect();
+                Ok(CheckResult::err(format!(
+                    "La réactivation de l’optimisation planifiée a échoué (code {}). Résultat : {}",
+                    code, preview.trim()
+                )))
             }
         }
     }
@@ -1461,6 +1878,9 @@ fn main() {
             check_antivirus,
             activate_defender,
             check_storage_type,
+            check_trim_optimization,
+            fix_trim,
+            enable_optimize_task,
             check_winre,
             repair_winre,
             launch_windows_update,

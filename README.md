@@ -10,6 +10,7 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - Version de Windows (Windows 11 26H2)
 - Taille de la mémoire vive (RAM)
 - Type de stockage (SSD)
+- Optimisation TRIM du SSD
 - Environnement de récupération Windows (WinRE)
 - Vérification des fichiers Windows (sfc, DISM)
 - Nettoyage du disque
@@ -42,4 +43,4 @@ Dr Reco est un logiciel qui vise à assister le médecin généraliste dans l'en
 - `git clone https://github.com/djibe/dr-reco.git`
 - `cd dr-reco`
 - `npm install`
-- Build: `npm run tauri:build` (charge l'environnement Visual Studio et produit un exécutable autonome)
+- Build: `npm run tauri:build:win` (installateur et exécutable portable)

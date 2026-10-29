@@ -68,7 +68,7 @@ src/
     about.js     # about page
 
 src-tauri/
-  src/main.rs               # ALL backend code: helpers + 31 Tauri commands
+  src/main.rs               # ALL backend code: helpers + 36 Tauri commands
   tauri.conf.json           # app config (920×700 window, Dark theme, bundle)
   capabilities/default.json # Tauri permissions (core, hwinfo, shell, notification)
   Cargo.toml / Cargo.lock   # Rust dependencies
