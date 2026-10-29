@@ -77,6 +77,32 @@ export function renderAmelipro(container, navigate) {
         { text: 'Indisponible', color: 'warning' })
     }
 
+    // ── Apicrypt: registry declaration ────────────────────────────────────────
+    const apiRegItem = addCheck(checksList, 'Apicrypt détecté', 'Lecture du registre Windows…')
+    try {
+      const r = await invoke('check_apicrypt_registry')
+      setCheck(apiRegItem, r.is_ok ? 'success' : 'info', r.is_ok ? '✅' : 'ℹ️',
+        'Apicrypt détecté', r.detail,
+        r.is_ok ? { text: 'Détecté', color: 'success' } : { text: 'Non installé', color: 'subtle' })
+    } catch (e) {
+      setCheck(apiRegItem, 'warning', '⚠️', 'Apicrypt détecté',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
+    // ── Apicrypt: declared executable presence ────────────────────────────────
+    const apiExeItem = addCheck(checksList, 'Apicrypt disponible', 'Recherche du programme Apicrypt…')
+    try {
+      const r = await invoke('check_apicrypt_executable')
+      setCheck(apiExeItem, r.is_ok ? 'success' : 'info', r.is_ok ? '✅' : 'ℹ️',
+        'Apicrypt disponible', r.detail,
+        r.is_ok ? { text: 'Disponible', color: 'success' } : { text: 'Non installé', color: 'subtle' })
+    } catch (e) {
+      setCheck(apiExeItem, 'warning', '⚠️', 'Apicrypt disponible',
+        `La vérification n'a pas pu être lancée : ${e}`,
+        { text: 'Indisponible', color: 'warning' })
+    }
+
     // ── Lecteur de carte à puce ───────────────────────────────────────────────
     const scItem = addCheck(checksList, 'Lecteur de carte à puce', 'Recherche de périphériques connectés…')
     try {

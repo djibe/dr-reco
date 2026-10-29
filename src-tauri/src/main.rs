@@ -514,6 +514,111 @@ fn check_services_cnam() -> Result<CheckResult, String> {
     }
 }
 
+// ─── Apicrypt companion ───────────────────────────────────────────────────────
+const APICRYPT_COMMAND_KEY: &str = r"compagnonApicrypt\shell\open\command";
+
+/// Read the command line declared for the Apicrypt companion ProgID.
+/// Checked in the merged HKEY_CLASSES_ROOT view first, then in the machine hive.
+fn apicrypt_raw_command() -> Option<String> {
+    let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
+    let key = hkcr
+        .open_subkey(APICRYPT_COMMAND_KEY)
+        .or_else(|_| {
+            RegKey::predef(HKEY_LOCAL_MACHINE)
+                .open_subkey(format!("SOFTWARE\\Classes\\{}", APICRYPT_COMMAND_KEY))
+        })
+        .ok()?;
+    key.get_value::<String, _>("").ok()
+}
+
+/// Expand %VAR% references using the current process environment.
+fn expand_env_vars(value: &str) -> String {
+    let mut out = String::new();
+    let mut rest = value;
+    loop {
+        let Some(start) = rest.find('%') else {
+            out.push_str(rest);
+            break;
+        };
+        let after = &rest[start + 1..];
+        let Some(end) = after.find('%') else {
+            out.push_str(rest);
+            break;
+        };
+        out.push_str(&rest[..start]);
+        let name = &after[..end];
+        match std::env::var(name) {
+            Ok(v) => out.push_str(&v),
+            Err(_) => {
+                out.push('%');
+                out.push_str(name);
+                out.push('%');
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    out
+}
+
+/// Extract the executable path from a registry command line
+/// (e.g. `"C:\Program Files\APICEM\CompagnonApicrypt\compagnonApicrypt.exe" %1`).
+fn apicrypt_exe_path(command: &str) -> Option<String> {
+    let command = command.trim();
+    let raw = if let Some(stripped) = command.strip_prefix('"') {
+        stripped.split('"').next()?
+    } else {
+        // Unquoted command line: keep everything up to and including ".exe".
+        let lower = command.to_lowercase();
+        match lower.find(".exe") {
+            Some(i) => &command[..i + 4],
+            None => command,
+        }
+    };
+    let path = expand_env_vars(raw).trim().to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
+
+const APICRYPT_NOT_INSTALLED: &str = "Apicrypt n'est pas installé sur ce poste.";
+
+#[tauri::command]
+fn check_apicrypt_registry() -> Result<CheckResult, String> {
+    match apicrypt_raw_command() {
+        None => Ok(CheckResult::missing(APICRYPT_NOT_INSTALLED)),
+        Some(command) => match apicrypt_exe_path(&command) {
+            None => Ok(CheckResult::missing(
+                "Apicrypt est déclaré dans le registre Windows, mais le chemin du programme n'a pas pu être lu.",
+            )),
+            Some(path) => Ok(CheckResult::ok(format!(
+                "Apicrypt est déclaré sur ce poste : {}",
+                path
+            ))),
+        },
+    }
+}
+
+#[tauri::command]
+fn check_apicrypt_executable() -> Result<CheckResult, String> {
+    let Some(command) = apicrypt_raw_command() else {
+        return Ok(CheckResult::missing(APICRYPT_NOT_INSTALLED));
+    };
+    let Some(path) = apicrypt_exe_path(&command) else {
+        return Ok(CheckResult::missing(
+            "Apicrypt est déclaré dans le registre Windows, mais le chemin du programme n'a pas pu être lu.",
+        ));
+    };
+    if std::path::Path::new(&path).is_file() {
+        Ok(CheckResult::ok(format!(
+            "Le programme Apicrypt est bien présent : {}",
+            path
+        )))
+    } else {
+        Ok(CheckResult::missing(format!(
+            "Le registre référence {}, mais le fichier est introuvable. Réinstaller Apicrypt.",
+            path
+        )))
+    }
+}
+
 // ─── Smart card reader detection ─────────────────────────────────────────────
 #[tauri::command]
 async fn check_smartcard_reader(app: tauri::AppHandle) -> Result<CheckResult, String> {
@@ -1360,6 +1465,8 @@ fn main() {
             repair_winre,
             launch_windows_update,
             check_services_cnam,
+            check_apicrypt_registry,
+            check_apicrypt_executable,
             check_smartcard_reader,
             check_bluetooth_adapter,
             check_scard_service,
