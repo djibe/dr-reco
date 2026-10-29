@@ -10,7 +10,7 @@ export function renderAmelipro(container, navigate) {
         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="var(--dr-primary)"><path d="M420-360h120l-23-129q20-10 31.5-29t11.5-42q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560q0 23 11.5 42t31.5 29l-23 129Zm60 280q-139-35-229.5-159.5T160-516v-244l320-120 320 120v244q0 152-90.5 276.5T480-80Zm0-84q104-33 172-132t68-220v-189l-240-90-240 90v189q0 121 68 220t172 132Zm0-316Z"/></svg>
         <h2>Outils Amelipro</h2>
       </div>
-      <p>Vérification des prérequis logiciels pour Amelipro</p>
+      <p>Vérification pour l’utilisation de la carte Vitale et d’Amelipro</p>
 
       <button class="btn-dr-primary mt-5" id="launch-btn" style="width: fit-content">▶ Lancer l’analyse</button>
 
@@ -66,7 +66,7 @@ export function renderAmelipro(container, navigate) {
       const color = r.is_ok ? 'success' : (r.not_found ? 'danger' : 'warning')
       const icon  = r.is_ok ? '✅' : (r.not_found ? '❌' : '⚠️')
       const badge = r.is_ok
-        ? { text: 'Conforme',            color: 'success' }
+        ? { text: 'OK',            color: 'success' }
         : r.not_found
           ? { text: 'Non installé',        color: 'danger'  }
           : { text: 'Mise à jour requise', color: 'warning' }
@@ -113,12 +113,12 @@ export function renderAmelipro(container, navigate) {
       } else {
         setCheck(scItem, r.is_ok ? 'success' : 'error', r.is_ok ? '✅' : '❌',
           'Lecteur de carte à puce', r.detail,
-          r.is_ok ? { text: 'Connecté', color: 'success' } : { text: 'Non détecté', color: 'danger' })
+          r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Non détecté', color: 'danger' })
       }
     } catch (e) {
       setCheck(scItem, 'warning', '⚠️', 'Lecteur de carte à puce',
         `La détection n'a pas pu être lancée : ${e}`,
-        { text: 'Indisponible', color: 'warning' })
+        { text: 'Erreur', color: 'warning' })
     }
 
     // ── Service Carte à puce (SCardSvr) ───────────────────────────────────────
@@ -135,7 +135,7 @@ export function renderAmelipro(container, navigate) {
         scardNotAuto = !r.is_ok
         setCheck(scardItem, r.is_ok ? 'success' : 'warning', r.is_ok ? '✅' : '⚠️',
           'Service Carte à puce (SCardSvr)', r.detail,
-          r.is_ok ? { text: 'Automatique', color: 'success' } : { text: 'Démarrage manuel', color: 'warning' })
+          r.is_ok ? { text: 'OK', color: 'success' } : { text: 'Démarrage manuel', color: 'warning' })
       }
     } catch (e) {
       setCheck(scardItem, 'warning', '⚠️', 'Service Carte à puce (SCardSvr)',
@@ -161,7 +161,7 @@ export function renderAmelipro(container, navigate) {
       } else if (r.extension_found) {
         detectedBrowser = r.browser
         setCheck(brItem, 'success', '✅', 'Navigateur & extension Carte Vitale',
-          r.detail, { text: r.browser_label, color: 'success' })
+          r.detail, { text: 'OK', color: 'success' })
       } else {
         detectedBrowser = r.browser
         extensionMissingBrowser = r.browser
@@ -187,7 +187,7 @@ export function renderAmelipro(container, navigate) {
         }
         const icon  = r.is_ok ? '✅' : '⚠️'
         const badge = r.is_ok
-          ? { text: `v${r.installed}`, color: 'success' }
+          ? { text: `OK`, color: 'success' }
           : r.installed === ''
             ? { text: 'Non détecté', color: 'warning' }
             : { text: 'Mise à jour requise', color: 'warning' }
@@ -195,7 +195,7 @@ export function renderAmelipro(container, navigate) {
           `Version de ${r.browser_label}`, r.detail, badge)
       } catch (e) {
         setCheck(vbrItem, 'warning', '⚠️', 'Version du navigateur',
-          `La vérification de version n'a pas pu être lancée : ${e}`,
+          `La vérification de version n’a pas pu être lancée : ${e}`,
           { text: 'Indisponible', color: 'warning' })
       }
     }
@@ -232,15 +232,15 @@ export function renderAmelipro(container, navigate) {
       { cmd: 'disable_usb_hub_timeout', icon: '⏱️', label: 'Délai de mise en veille des hubs USB',
         action: 'Désactiver le délai de mise en veille des hubs USB',
         plan: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 ms puis /SETACTIVE',
-        badge: 'Désactivé', successBtn: 'Délai des hubs USB désactivé' },
+        badge: 'OK', successBtn: 'Délai des hubs USB désactivé' },
       { cmd: 'disable_usb_suspend', icon: '🔌', label: 'Mise en veille sélective USB',
         action: 'Désactiver la mise en veille sélective USB',
         plan: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 puis /SETACTIVE',
-        badge: 'Désactivée', successBtn: 'Mise en veille USB désactivée' },
+        badge: 'OK', successBtn: 'Mise en veille USB désactivée' },
       { cmd: 'disable_usb3_lpm', icon: '⚡', label: 'Gestion de l’alimentation de la liaison USB 3',
         action: 'Désactiver la gestion de l’alimentation USB 3',
         plan: 'powercfg /SETACVALUEINDEX + /SETDCVALUEINDEX → 0 (Off) puis /SETACTIVE',
-        badge: 'Désactivée', successBtn: 'Alimentation USB 3 désactivée' },
+        badge: 'OK', successBtn: 'Alimentation USB 3 désactivée' },
     ]
     const usbFailed = []
     for (const s of usbSettings) {

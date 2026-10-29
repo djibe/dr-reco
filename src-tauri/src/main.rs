@@ -234,7 +234,7 @@ fn check_cryptolib_version() -> Result<CheckResult, String> {
                 let version = version.trim().to_string();
                 let is_ok = compare_versions(&version, MIN_CRYPTOLIB_VERSION) >= 0;
                 let detail = if is_ok {
-                    format!("Cryptolib CPS version {} — conforme (minimum requis : {}).", version, MIN_CRYPTOLIB_VERSION)
+                    format!("Version {}.", MIN_CRYPTOLIB_VERSION)
                 } else {
                     format!("Cryptolib CPS version {} installée, mais {} minimum requis. Télécharger la dernière version sur le site de l'ANS.", version, MIN_CRYPTOLIB_VERSION)
                 };
@@ -919,10 +919,10 @@ fn check_services_cnam() -> Result<CheckResult, String> {
             Ok(name) => {
                 let name = name.trim().to_string();
                 if name == EXPECTED_SRVSVCNAM {
-                    Ok(CheckResult::ok(format!("Services CNAM détectés : {} — Version conforme.", name)))
+                    Ok(CheckResult::ok(format!("{}.", name)))
                 } else {
                     Ok(CheckResult::err(format!(
-                        "Services CNAM détectés mais version incorrecte : \"{}\" (attendu : \"{}\"). Veuillez mettre à jour le composant.",
+                        "Services CNAM détectés mais version incorrecte : \"{}\" (attendu : \"{}\"). Mettre à jour le module Amelipro.",
                         name, EXPECTED_SRVSVCNAM
                     )))
                 }
@@ -1047,7 +1047,7 @@ async fn check_smartcard_reader(app: tauri::AppHandle) -> Result<CheckResult, St
         PsResult::Ok(output, _) => {
             let names: Vec<&str> = output.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
             if names.is_empty() {
-                Ok(CheckResult::err("Aucun lecteur de carte à puce détecté. Vérifier que le lecteur est branché et que ses pilotes sont installés."))
+                Ok(CheckResult::err("Aucun lecteur de carte à puce détecté. Vérifier que le lecteur est branché."))
             } else {
                 Ok(CheckResult::ok(format!("Lecteur de carte à puce détecté : {}.", names.join(", "))))
             }
@@ -1262,11 +1262,12 @@ fn check_browser_version(browser: String) -> Result<BrowserVersionResult, String
         });
     }
 
+    // Browser text
     let major: u32 = installed.split(|c: char| !c.is_ascii_digit()).next()
         .and_then(|s| s.parse().ok()).unwrap_or(0);
     let is_ok = major >= latest_major;
     let detail = if is_ok {
-        format!("{} version {} — à jour (version majeure minimale : {}).", browser_label, installed, latest_major)
+        format!("{} version {}.", browser_label, installed)
     } else {
         format!("{} version {} — obsolète. La version {} ou supérieure est recommandée. Mettre à jour le navigateur.", browser_label, installed, latest_major)
     };
@@ -1627,7 +1628,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
             if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
-                Ok(CheckResult::ok("Délai de mise en veille des hubs USB désactivé (0 ms). Les hubs USB resteront alimentés en permanence."))
+                Ok(CheckResult::ok("Les hubs USB restent alimentés en permanence."))
             } else {
                 Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
@@ -1677,7 +1678,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
             if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
-                Ok(CheckResult::ok("Mise en veille sélective USB désactivée. Les périphériques USB resteront alimentés en permanence."))
+                Ok(CheckResult::ok("Les périphériques USB restent alimentés en permanence."))
             } else {
                 Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
@@ -1727,7 +1728,7 @@ Write-Output "acSet=$acSet dcSet=$dcSet activated=$activated"
             let dc_set = parse_num("dcSet=");
             let activated = parse_num("activated=");
             if revealed && ac_set == 0 && dc_set == 0 && activated == 0 {
-                Ok(CheckResult::ok("Gestion de l'alimentation de la liaison USB 3 désactivée (Off). Les périphériques USB 3 resteront alimentés en permanence."))
+                Ok(CheckResult::ok("Les périphériques USB 3 restent alimentés en permanence."))
             } else {
                 Ok(CheckResult::err(format!("La désactivation n'a pas pu être appliquée entièrement (registre : {}, écriture secteur/batterie : {}/{}, activation : {}). Relancez l'opération.", if revealed { "OK" } else { "échec" }, ac_set, dc_set, activated)))
             }
@@ -1823,8 +1824,7 @@ else { Write-Output "$($svc.StartType)|$($svc.Status)" }
             let status = parts.get(1).copied().unwrap_or("").trim();
             if start_type.eq_ignore_ascii_case("Automatic") {
                 Ok(CheckResult::ok(format!(
-                    "Service Carte à puce (SCardSvr) en démarrage automatique (état : {}). Le lecteur de carte sera détecté au branchement.",
-                    status
+                    "Le carte CPS et la carte Vitale sont lisibles sur le champ."
                 )))
             } else {
                 Ok(CheckResult::err(format!(
